@@ -38,6 +38,13 @@ def planned_positions(duration: float, interval: float, maximum: int) -> list[fl
             for i in range(total)]
 
 
+def source_frame_filename(video: Path, index: int, seconds: float) -> str:
+    """Stable, source-aware name. Milliseconds distinguish close seek requests."""
+    if index < 1 or not math.isfinite(seconds) or seconds < 0:
+        raise ValueError("Invalid frame index or timestamp")
+    return f"{video.stem}__f{index:04d}__t{round(seconds * 1000):09d}ms.jpg"
+
+
 def extract_frames(video: Path, output: Path, *, interval: float = 10,
                    maximum: int = 60, ffmpeg: str = "ffmpeg",
                    ffprobe: str = "ffprobe", dry_run: bool = False) -> dict:
@@ -71,7 +78,7 @@ def extract_frames(video: Path, output: Path, *, interval: float = 10,
         return manifest
     output.mkdir(parents=True, exist_ok=True)
     for index, position in enumerate(positions, 1):
-        name = f"frame_{index:04d}.jpg"
+        name = source_frame_filename(video, index, position)
         destination = output / name
         proc = subprocess.run(
             [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-ss",
