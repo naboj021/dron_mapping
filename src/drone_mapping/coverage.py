@@ -43,7 +43,7 @@ def compare_layouts(geom, camera: Camera, survey: Survey, angles=None) -> dict:
         })
     # Lower length first, then fewer segments, then smaller azimuth.
     # This heuristic is NOT a shortest flight path.
-    winner = min(candidates, key=lambda x: (
+    nonempty = [c for c in candidates if c["segment_count"] > 0]\n    if not nonempty:\n        raise ValueError("No conceptual lines intersect the polygon at this spacing")\n    winner = min(nonempty, key=lambda x: (
         x["total_clipped_length_m"], x["segment_count"], x["azimuth_deg"]
     ))
     return {
