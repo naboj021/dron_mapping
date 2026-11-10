@@ -11,7 +11,9 @@ def test_viewport_fit_and_editable_polygons(tmp_path: Path):
         "frames": [{"filename": "frame_0009.jpg", "requested_seek_seconds": 85}],
     }), encoding="utf-8")
     html = build_review_page(tmp_path).read_text(encoding="utf-8")
-    assert "max-height:calc(100vh - 190px)" in html
+    assert "#viewer{width:100%;height:62vh" in html
+    assert "function updateZoom(" in html
+    assert 'id="zoom"' in html
     assert 'dataset.vertex' in html
     assert 'dataset.edge' in html
     assert 'MANUAL_POLYGON_VISUAL_REVIEW' in html
