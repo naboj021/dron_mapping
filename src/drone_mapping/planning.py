@@ -7,7 +7,7 @@ import json
 
 from pyproj import CRS, Transformer
 from shapely.geometry import shape
-from shapely.ops import transform, unary_union
+from shapely import transform\nfrom shapely.ops import unary_union
 
 
 @dataclass(frozen=True)
@@ -90,7 +90,7 @@ def estimate(geom, camera: Camera, survey: Survey) -> dict:
     zone = min(60, int((longitude + 180) // 6) + 1)
     epsg = (32600 if latitude >= 0 else 32700) + zone
     transformer = Transformer.from_crs(CRS.from_epsg(4326), CRS.from_epsg(epsg), always_xy=True)
-    projected = transform(transformer.transform, geom)
+    projected = transform(geom, transformer.transform, interleaved=False)
     footprint_width = survey.height_above_surface_m * camera.sensor_width_mm / camera.focal_length_mm
     footprint_height = survey.height_above_surface_m * camera.sensor_height_mm / camera.focal_length_mm
     step_across = footprint_width * (1 - survey.side_overlap)
