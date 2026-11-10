@@ -29,6 +29,7 @@ button.primary{background:#176e57;color:white;border-color:#176e57}
 #overlay polygon.selected{stroke:#10c4cc;stroke-width:3}
 #overlay circle{fill:white;stroke:#087f82;stroke-width:2;vector-effect:non-scaling-stroke;cursor:grab;pointer-events:all}
 #overlay circle:active{cursor:grabbing}
+#overlay line.edge{stroke:transparent;stroke-width:16;vector-effect:non-scaling-stroke;pointer-events:stroke;cursor:move}
 
 label{display:block;font-size:13px;margin-top:10px;font-weight:600}
 input,textarea,select{width:100%;box-sizing:border-box;padding:7px;border:1px solid #afbcc6;border-radius:5px}
@@ -43,7 +44,7 @@ textarea{height:70px;resize:vertical}
 <section>
 <div><button id="prev">← Prethodni</button><button id="next">Sledeći →</button><strong id="position"></strong></div>
 <div id="viewer"><div id="framebox"><img id="photo" alt="Kadar iz DJI snimka"><svg id="overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg></div></div>
-<p class="note">Klikni redom na uglove krova; završi poligon dugmetom. Klikni oznaku u listi i prevuci temena da ih pomeriš. Jedan kadar može imati više poligona. Prikaz nije georeferenciranje.</p>
+<p class="note">Klikni redom na uglove krova; završi poligon dugmetom. Klikni oznaku u listi i prevuci temena ili samu ivicu да је помериш. Jedan kadar može imati više poligona. Prikaz nije georeferenciranje.</p>
 </section>
 <section>
 <strong>Nova oznaka</strong>
@@ -85,6 +86,16 @@ function draw(points,kind,owner){
   overlay.appendChild(p);
  }
  if(kind==="draft"||kind==="selected"){
+  if(points.length>=2){
+   const count=kind==="draft"?points.length-1:points.length;
+   for(let i=0;i<count;i++){
+    const a=points[i],b=points[(i+1)%points.length],line=svg("line");
+    line.setAttribute("x1",a[0]*1000);line.setAttribute("y1",a[1]*1000);
+    line.setAttribute("x2",b[0]*1000);line.setAttribute("y2",b[1]*1000);
+    line.classList.add("edge");line.dataset.owner=owner;line.dataset.edge=i;
+    overlay.appendChild(line);
+   }
+  }
   points.forEach((q,i)=>{
    const c=svg("circle");c.setAttribute("cx",q[0]*1000);c.setAttribute("cy",q[1]*1000);
    c.setAttribute("r",7);c.dataset.owner=owner;c.dataset.vertex=i;overlay.appendChild(c);
@@ -132,6 +143,12 @@ function validPolygon(pts){
 }
 overlay.addEventListener("pointerdown",e=>{
  const t=e.target;
+ if(t.dataset.edge!==undefined){
+  const owner=t.dataset.owner,edge=Number(t.dataset.edge);
+  const target=owner==="draft"?draft:polygonPoints(records.find(r=>r.id===owner)||{});
+  if(edge>=target.length)return;
+  drag={owner,edge,last:coords(e)};overlay.setPointerCapture(e.pointerId);e.preventDefault();return;
+ }
  if(t.dataset.vertex!==undefined){
   const owner=t.dataset.owner,vertex=Number(t.dataset.vertex);
   const target=owner==="draft"?draft:polygonPoints(records.find(r=>r.id===owner)||{});
@@ -145,11 +162,18 @@ overlay.addEventListener("pointerdown",e=>{
 overlay.addEventListener("pointermove",e=>{
  if(!drag)return;
  const p=coords(e);
- if(drag.owner==="draft")draft[drag.vertex]=p;
- else{
-  const r=records.find(x=>x.id===drag.owner);
-  if(r){r.points=polygonPoints(r);r.points[drag.vertex]=p;delete r.box;dirty=true;}
- }
+ const record=drag.owner==="draft"?null:records.find(x=>x.id===drag.owner);
+ const target=record?polygonPoints(record):draft;
+ if(drag.edge!==undefined){
+  const dx=p[0]-drag.last[0],dy=p[1]-drag.last[1];
+  const i=drag.edge,j=(i+1)%target.length;
+  const deltaX=Math.max(-Math.min(target[i][0],target[j][0]),Math.min(dx,1-Math.max(target[i][0],target[j][0])));
+  const deltaY=Math.max(-Math.min(target[i][1],target[j][1]),Math.min(dy,1-Math.max(target[i][1],target[j][1])));
+  target[i]=[target[i][0]+deltaX,target[i][1]+deltaY];
+  target[j]=[target[j][0]+deltaX,target[j][1]+deltaY];
+  drag.last=p;
+ }else target[drag.vertex]=p;
+ if(record){record.points=target;delete record.box;dirty=true;}
  render();
 });
 function endDrag(e){if(drag){drag=null;if(overlay.hasPointerCapture(e.pointerId))overlay.releasePointerCapture(e.pointerId);render()}}
