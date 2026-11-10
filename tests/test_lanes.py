@@ -42,5 +42,7 @@ def test_reject_bad_spacing(demo_polygon, spacing):
 
 
 def test_reject_unreasonably_many_lanes(demo_polygon):
+    wide_polygon = Polygon([(19.88, 45.24), (19.91, 45.24),
+                            (19.91, 45.255), (19.88, 45.255)])
     with pytest.raises(ValueError):
-        conceptual_lanes(demo_polygon, spacing_m=0.5)
+        conceptual_lanes(wide_polygon, spacing_m=0.5)
