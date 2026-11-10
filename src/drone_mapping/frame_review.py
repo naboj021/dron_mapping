@@ -126,7 +126,7 @@ function scheduleSave(){
   if(!response.ok)throw Error(await response.text());
   savedVersion=Math.max(savedVersion,revision);
   if(savedVersion===editVersion){dirty=false;status("Сачувано на диску ✓")}
- }).catch(err=>{status("ГРЕШКА чувања — извези JSON! "+err.message);throw err});
+ }).catch(err=>{status("ГРЕШКА чувања — извези JSON! "+err.message)});
 }
 async function loadSaved(){
  if(!localMode){loaded=true;status("file:// режим: нема аутоматског чувања — извези JSON.");render();return}
@@ -135,10 +135,10 @@ async function loadSaved(){
   if(!response.ok)throw Error(await response.text());
   const data=await response.json();
   if(data.source_video!==dataset.source_filename||!Array.isArray(data.annotations))throw Error("Неодговарајућа датотека");
-  records=data.annotations;counter=records.length;savedVersion=editVersion;dirty=false;
+  records=data.annotations;counter=records.length;savedVersion=editVersion;dirty=false;loaded=true;
   status("Локално чување укључено ✓ ("+records.length+" ознака учитано)");
  }catch(err){status("Не могу да учитам локалне ознаке: "+err.message+". Не почињи анотацију.");}
- finally{loaded=localMode?records!==null:true;render()}
+ finally{render()}
 }
 const coords=e=>{const b=overlay.getBoundingClientRect();return [clamp((e.clientX-b.left)/b.width),clamp((e.clientY-b.top)/b.height)]};
 const polygonPoints=r=>r.points || (r.box?[[r.box.x,r.box.y],[r.box.x+r.box.w,r.box.y],[r.box.x+r.box.w,r.box.y+r.box.h],[r.box.x,r.box.y+r.box.h]]:[]);
@@ -185,7 +185,7 @@ function render(){
   del.onclick=()=>{if(confirm("Обрисати ову ознаку?")){records=records.filter(x=>x.id!==r.id);scheduleSave();if(selectedId===r.id)selectedId=null;render()}};
   li.append(choose,del);list.appendChild(li);
  }
- byId("save").disabled=draft.length<3;
+ byId("save").disabled=!loaded||draft.length<3;
 }
 function go(delta){
  if(draft.length&&!confirm("Одбацити незавршени полигон?"))return;
