@@ -7,7 +7,7 @@ import json
 
 from pyproj import CRS, Transformer
 from shapely.geometry import shape
-from shapely.ops import transform
+from shapely.ops import transform, unary_union
 
 
 @dataclass(frozen=True)
@@ -41,23 +41,38 @@ class Survey:
 
 
 def load_wgs84_polygon(path: str | Path):
-    """Read Polygon/MultiPolygon GeoJSON with WGS84 lon/lat coordinates."""
+    """Read polygonal WGS84 GeoJSON, combining multiple polygon features.
+
+    A collection is a study area only, not a flight path. Non-polygon features
+    and empty collections are rejected rather than silently ignored.
+    """
     raw = json.loads(Path(path).read_text(encoding="utf-8"))
     if raw.get("type") == "FeatureCollection":
         features = raw.get("features", [])
-        if len(features) != 1:
-            raise ValueError("Provide exactly one feature in a GeoJSON FeatureCollection")
-        geom_data = features[0]["geometry"]
+        if not features:
+            raise ValueError("GeoJSON FeatureCollection is empty")
+        geometries = [feature.get("geometry") for feature in features]
     elif raw.get("type") == "Feature":
-        geom_data = raw["geometry"]
+        geometries = [raw.get("geometry")]
     else:
-        geom_data = raw
-    geom = shape(geom_data)
+        geometries = [raw]
+
+    polygons = []
+    for index, geom_data in enumerate(geometries, start=1):
+        if geom_data is None:
+            raise ValueError(f"Feature {index} has no geometry")
+        geom = shape(geom_data)
+        if geom.geom_type not in ("Polygon", "MultiPolygon") or geom.is_empty or not geom.is_valid:
+            raise ValueError(f"Feature {index} must be a valid, nonempty Polygon/MultiPolygon")
+        xmin, ymin, xmax, ymax = geom.bounds
+        if not (-180 <= xmin <= xmax <= 180 and -90 <= ymin <= ymax <= 90):
+            raise ValueError(f"Feature {index} coordinates must be WGS84 lon/lat")
+        polygons.append(geom)
+
+    geom = unary_union(polygons)
     if geom.geom_type not in ("Polygon", "MultiPolygon") or geom.is_empty or not geom.is_valid:
-        raise ValueError("A valid Polygon or MultiPolygon is required")
+        raise ValueError("Merged study area must be a valid Polygon/MultiPolygon")
     xmin, ymin, xmax, ymax = geom.bounds
-    if not (-180 <= xmin <= xmax <= 180 and -90 <= ymin <= ymax <= 90):
-        raise ValueError("Coordinates must be WGS84 longitude/latitude")
     if xmax - xmin > 3 or ymax - ymin > 3:
         raise ValueError("Area too large for this local-UTM pilot estimator")
     return geom
