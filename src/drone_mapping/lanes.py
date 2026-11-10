@@ -75,16 +75,36 @@ def conceptual_lanes(geom, spacing_m: float, azimuth_deg: float = 0.0) -> dict:
                 continue
             restored = rotate(segment, -azimuth_deg, origin=projected.centroid)
             wgs84 = transform(backward.transform, restored)
-            lane_index += 1
-            features.append({
-                "type": "Feature",
-                "properties": {
-                    "preview_segment_id": lane_index,
-                    "length_m": round(segment.length, 2),
-                    "status": "CONCEPTUAL_ONLY_NOT_FOR_FLIGHT",
-                },
-                "geometry": mapping(wgs84),
-            })
+            # Reclip in the OUTPUT CRS: straight polygon edges in WGS84
+            # do not match projected straight edges exactly after reprojection.
+            # Without this guard, a segment may extend a few centimetres
+            # outside an original boundary or over the edge of a hole.
+            output_clipped = wgs84.intersection(geom)
+            if isinstance(output_clipped, LineString):
+                output_parts = [output_clipped]
+            elif isinstance(output_clipped, MultiLineString):
+                output_parts = list(output_clipped.geoms)
+            else:
+                output_parts = [
+                    part for part in getattr(output_clipped, "geoms", [])
+                    if isinstance(part, LineString)
+                ]
+            for part in output_parts:
+                if part.is_empty:
+                    continue
+                actual_length_m = transform(forward.transform, part).length
+                if actual_length_m < 0.01:
+                    continue
+                lane_index += 1
+                features.append({
+                    "type": "Feature",
+                    "properties": {
+                        "preview_segment_id": lane_index,
+                        "length_m": round(actual_length_m, 2),
+                        "status": "CONCEPTUAL_ONLY_NOT_FOR_FLIGHT",
+                    },
+                    "geometry": mapping(part),
+                })
     return {
         "type": "FeatureCollection",
         "name": "conceptual_survey_lanes_NOT_FOR_FLIGHT",
