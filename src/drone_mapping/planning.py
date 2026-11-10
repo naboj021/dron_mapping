@@ -7,7 +7,8 @@ import json
 
 from pyproj import CRS, Transformer
 from shapely.geometry import shape
-from shapely import transform\nfrom shapely.ops import unary_union
+from shapely import transform
+from shapely.ops import unary_union
 
 
 @dataclass(frozen=True)
