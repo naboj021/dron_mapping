@@ -51,6 +51,14 @@ textarea{height:70px;resize:vertical}
 </section>
 <section>
 <strong>Nova oznaka</strong>
+<label>Положај дела објекта / крова</label><select id="orientation">
+<option value="">Није одређено</option>
+<option value="N">Север</option><option value="NE">Североисток</option>
+<option value="E">Исток</option><option value="SE">Југоисток</option>
+<option value="S">Југ</option><option value="SW">Југозапад</option>
+<option value="W">Запад</option><option value="NW">Северозапад</option>
+<option value="CENTRAL">Средишњи део</option>
+</select>
 <label>Opis oblasti</label><input id="label" placeholder="npr. dva krova gore levo / deo vrtića">
 <label>Vizuelna kategorija</label><select id="category">
 <option value="suspected_fibrecement">Sumnja na vlaknocementni pokrivač</option>
@@ -59,17 +67,20 @@ textarea{height:70px;resize:vertical}
 <option value="replaced_roof_section">Zamenjeni deo krova — istorijska promena</option>
 <option value="unknown">Neodređeno</option></select>
 <label>Opis / napomena</label><textarea id="note" placeholder="Šta se vidi; šta treba proveriti?"></textarea>
-<label>KML oznaka (opciono, ručna veza)</label><input id="kml" placeholder="ID placemarka ili originalni naziv">
+<label>KML ID објекта (опционо, може се понављати за више кровова)</label><input id="kml" placeholder="Остави празно ако област није била у KML-у">
 <div><button class="primary" id="save" disabled>Сачувај област</button><button id="cancel">Откажи цртање</button></div>
 <hr>
-<button class="primary" id="export">Извези annotations JSON</button>
+<div id="saveStatus" role="status" style="font-weight:600;margin:8px 0">Провера локалног чувања…</div><button class="primary" id="export">Извези annotations JSON (резервна копија)</button>
 <label>Настави рад: учитај раније извезен JSON</label><input type="file" id="import" accept=".json,application/json">
-<p class="note">Промене нису аутоматски сачуване. Извези JSON пре затварања. Снимци и ознаке остају локални; ништа се не шаље на сервер. Све визуелне процене су без лабораторијске потврде.</p>
+<p class="note">Када је страница отворена преко локалног http://127.0.0.1 сервера, свака измена се аутоматски чува у локални JSON на диску. На file:// страници нема аутоматског чувања: обавезно извези JSON. Ниједан податак се не шаље на интернет. Означени материјал није лабораторијски потврђен.</p>
 </section></main>
 <script>
 "use strict";
 const dataset=__DATA__;
 let index=0, records=[], draft=[], selectedId=null, drag=null, counter=0, dirty=false, zoom=1;
+const localMode=location.protocol==="http:"&&location.hostname==="127.0.0.1";
+const reviewToken="__LOCAL_REVIEW_TOKEN__";
+let saveQueue=Promise.resolve(), editVersion=0, savedVersion=0, loaded=false;
 const byId=id=>document.getElementById(id);
 byId("source").textContent=dataset.source_filename;
 const overlay=byId("overlay"), img=byId("photo"), viewer=byId("viewer"), framebox=byId("framebox");
@@ -100,6 +111,35 @@ byId("fit").onclick=()=>{zoom=1;updateZoom(false)};
 
 const clamp=v=>Math.max(0,Math.min(1,v));
 const active=()=>dataset.frames[index];
+function status(message){byId("saveStatus").textContent=message}
+function scheduleSave(){
+ dirty=true;const revision=++editVersion;
+ if(!localMode){status("Није аутоматски сачувано: извези JSON или отвори локални сервер.");return}
+ const payload=JSON.stringify({schema_version:2,source_video:dataset.source_filename,
+  review_type:"MANUAL_POLYGON_VISUAL_REVIEW",annotations:records});
+ status("Чување у локални JSON…");
+ saveQueue=saveQueue.catch(()=>{}).then(async()=>{
+  const response=await fetch("/api/annotations",{
+   method:"POST",headers:{"Content-Type":"application/json","X-Review-Token":reviewToken},
+   body:payload
+  });
+  if(!response.ok)throw Error(await response.text());
+  savedVersion=Math.max(savedVersion,revision);
+  if(savedVersion===editVersion){dirty=false;status("Сачувано на диску ✓")}
+ }).catch(err=>{status("ГРЕШКА чувања — извези JSON! "+err.message);throw err});
+}
+async function loadSaved(){
+ if(!localMode){loaded=true;status("file:// режим: нема аутоматског чувања — извези JSON.");render();return}
+ try{
+  const response=await fetch("/api/annotations",{headers:{"X-Review-Token":reviewToken}});
+  if(!response.ok)throw Error(await response.text());
+  const data=await response.json();
+  if(data.source_video!==dataset.source_filename||!Array.isArray(data.annotations))throw Error("Неодговарајућа датотека");
+  records=data.annotations;counter=records.length;savedVersion=editVersion;dirty=false;
+  status("Локално чување укључено ✓ ("+records.length+" ознака учитано)");
+ }catch(err){status("Не могу да учитам локалне ознаке: "+err.message+". Не почињи анотацију.");}
+ finally{loaded=localMode?records!==null:true;render()}
+}
 const coords=e=>{const b=overlay.getBoundingClientRect();return [clamp((e.clientX-b.left)/b.width),clamp((e.clientY-b.top)/b.height)]};
 const polygonPoints=r=>r.points || (r.box?[[r.box.x,r.box.y],[r.box.x+r.box.w,r.box.y],[r.box.x+r.box.w,r.box.y+r.box.h],[r.box.x,r.box.y+r.box.h]]:[]);
 const svg=(tag)=>document.createElementNS("http://www.w3.org/2000/svg",tag);
@@ -139,10 +179,10 @@ function render(){
  const list=byId("records");list.replaceChildren();
  for(const r of current){
   const li=document.createElement("li");
-  const choose=document.createElement("button");choose.textContent=(r.id===selectedId?"✓ ":"Измени: ")+(r.description||r.visual_category);
+  const choose=document.createElement("button");choose.textContent=(r.id===selectedId?"✓ ":"Измени: ")+(r.orientation?"["+r.orientation+"] ":"")+(r.description||r.visual_category)+(r.kml_reference?" · KML "+r.kml_reference:" · није у KML-у");
   choose.onclick=()=>{selectedId=selectedId===r.id?null:r.id;draft=[];render()};
   const del=document.createElement("button");del.textContent="Обриши";
-  del.onclick=()=>{if(confirm("Обрисати ову ознаку?")){records=records.filter(x=>x.id!==r.id);dirty=true;if(selectedId===r.id)selectedId=null;render()}};
+  del.onclick=()=>{if(confirm("Обрисати ову ознаку?")){records=records.filter(x=>x.id!==r.id);scheduleSave();if(selectedId===r.id)selectedId=null;render()}};
   li.append(choose,del);list.appendChild(li);
  }
  byId("save").disabled=draft.length<3;
@@ -200,27 +240,28 @@ overlay.addEventListener("pointermove",e=>{
  if(record){record.points=target;delete record.box;dirty=true;}
  render();
 });
-function endDrag(e){if(drag){drag=null;if(overlay.hasPointerCapture(e.pointerId))overlay.releasePointerCapture(e.pointerId);render()}}
+function endDrag(e){if(drag){const recordChange=drag.owner!=="draft";drag=null;if(overlay.hasPointerCapture(e.pointerId))overlay.releasePointerCapture(e.pointerId);if(recordChange)scheduleSave();render()}}
 overlay.addEventListener("pointerup",endDrag);
 overlay.addEventListener("pointercancel",endDrag);
 byId("prev").onclick=()=>go(-1);
 byId("next").onclick=()=>go(1);
 byId("cancel").onclick=()=>{draft=[];selectedId=null;render()};
 byId("save").onclick=()=>{
+ if(!loaded){alert("Сачекај потврду учитавања локалних података.");return}
  if(!validPolygon(draft)){alert("Полигон није исправан. Потребна су бар три темена без самопресецања.");return;}
  const f=active();counter++;
  records.push({id:"a"+counter+"_"+Date.now(),source_video:dataset.source_filename,frame_filename:f.filename,
   requested_seek_seconds:f.requested_seek_seconds,points:draft.map(q=>q.slice()),
   image_width_px:img.naturalWidth,image_height_px:img.naturalHeight,
-  description:byId("label").value.trim(),visual_category:byId("category").value,note:byId("note").value.trim(),
+  description:byId("label").value.trim(),orientation:byId("orientation").value,visual_category:byId("category").value,note:byId("note").value.trim(),
   kml_reference:byId("kml").value.trim()||null,evidence_status:"MANUAL_VISUAL_REVIEW_NOT_LAB_CONFIRMED"});
- dirty=true;draft=[];selectedId=null;byId("label").value="";byId("note").value="";byId("kml").value="";byId("category").selectedIndex=0;render();
+ scheduleSave();draft=[];selectedId=null;byId("label").value="";byId("note").value="";byId("kml").value="";byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;render();
 };
 byId("export").onclick=()=>{
  const payload={schema_version:2,source_video:dataset.source_filename,review_type:"MANUAL_POLYGON_VISUAL_REVIEW",annotations:records};
  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}));
  const a=document.createElement("a");a.href=url;a.download="annotations_"+dataset.source_filename.replace(/\.mp4$/i,"")+".json";a.click();
- setTimeout(()=>URL.revokeObjectURL(url),1000);dirty=false;
+ setTimeout(()=>URL.revokeObjectURL(url),1000);if(!localMode){dirty=false;status("JSON извезен; сачувај преузету датотеку.")}
 };
 byId("import").onchange=async e=>{
  const file=e.target.files[0];if(!file)return;
@@ -231,11 +272,11 @@ byId("import").onchange=async e=>{
   const converted=data.annotations.map((r,i)=>({...r,id:String(r.id||("import_"+i)),points:polygonPoints(r)}));
   if(converted.some(r=>!names.has(r.frame_filename)||r.points.length<3||r.points.some(p=>!Array.isArray(p)||p.length!==2||p.some(v=>!Number.isFinite(v)||v<0||v>1))||!validPolygon(r.points)))throw Error("Неисправне геометрије или називи");
   if((records.length||dirty)&&!confirm("Заменити текуће ознаке подацима из JSON-а?"))return;
-  records=converted;counter=records.length;selectedId=null;draft=[];dirty=true;render();
+  records=converted;counter=records.length;selectedId=null;draft=[];scheduleSave();render();
  }catch(err){alert("Увоз није успео: "+err.message)}
 };
 window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault();e.returnValue=""}});
-render();
+loadSaved();
 </script></body></html>"""
 
 
