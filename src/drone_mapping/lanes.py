@@ -14,7 +14,7 @@ from pathlib import Path
 from pyproj import CRS, Transformer
 from shapely.affinity import rotate
 from shapely.geometry import LineString, MultiLineString, mapping
-from shapely.ops import transform
+from shapely import transform
 
 from .planning import load_wgs84_polygon
 
@@ -43,7 +43,7 @@ def conceptual_lanes(geom, spacing_m: float, azimuth_deg: float = 0.0) -> dict:
     epsg = local_utm_epsg(geom)
     forward = Transformer.from_crs(4326, CRS.from_epsg(epsg), always_xy=True)
     backward = Transformer.from_crs(CRS.from_epsg(epsg), 4326, always_xy=True)
-    projected = transform(forward.transform, geom)
+    projected = transform(geom, forward.transform, interleaved=False)
     if projected.area > 10_000_000:
         raise ValueError("Pilot area exceeds preview limit (10 square kilometres)")
 
@@ -74,7 +74,7 @@ def conceptual_lanes(geom, spacing_m: float, azimuth_deg: float = 0.0) -> dict:
             if segment.length < 0.01:
                 continue
             restored = rotate(segment, -azimuth_deg, origin=projected.centroid)
-            wgs84 = transform(backward.transform, restored)
+            wgs84 = transform(restored, backward.transform, interleaved=False)
             # Reclip in the OUTPUT CRS: straight polygon edges in WGS84
             # do not match projected straight edges exactly after reprojection.
             # Without this guard, a segment may extend a few centimetres
@@ -92,7 +92,7 @@ def conceptual_lanes(geom, spacing_m: float, azimuth_deg: float = 0.0) -> dict:
             for part in output_parts:
                 if part.is_empty:
                     continue
-                actual_length_m = transform(forward.transform, part).length
+                actual_length_m = transform(part, forward.transform, interleaved=False).length
                 if actual_length_m < 0.01:
                     continue
                 lane_index += 1
