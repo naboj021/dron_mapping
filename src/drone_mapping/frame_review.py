@@ -168,6 +168,17 @@ function draw(points,kind,owner){
   });
  }
 }
+function clearForm(){
+ byId("label").value="";byId("note").value="";byId("kml").value="";
+ byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;
+}
+function loadForm(r){
+ byId("label").value=r.description||"";
+ byId("note").value=r.note||"";
+ byId("kml").value=r.kml_reference||"";
+ byId("orientation").value=r.orientation||"";
+ byId("category").value=r.visual_category||"unknown";
+}
 function render(){
  const f=active();const url=encodeURIComponent(f.filename);
  if(img.getAttribute("src")!==url)img.src=url;
@@ -180,12 +191,13 @@ function render(){
  for(const r of current){
   const li=document.createElement("li");
   const choose=document.createElement("button");choose.textContent=(r.id===selectedId?"✓ ":"Измени: ")+(r.orientation?"["+r.orientation+"] ":"")+(r.description||r.visual_category)+(r.kml_reference?" · KML "+r.kml_reference:" · није у KML-у");
-  choose.onclick=()=>{selectedId=selectedId===r.id?null:r.id;draft=[];render()};
+  choose.onclick=()=>{selectedId=selectedId===r.id?null:r.id;draft=[];if(selectedId)loadForm(r);else clearForm();render()};
   const del=document.createElement("button");del.textContent="Обриши";
   del.onclick=()=>{if(confirm("Обрисати ову ознаку?")){records=records.filter(x=>x.id!==r.id);scheduleSave();if(selectedId===r.id)selectedId=null;render()}};
   li.append(choose,del);list.appendChild(li);
  }
- byId("save").disabled=!loaded||draft.length<3;
+ byId("save").disabled=!loaded||(!selectedId&&draft.length<3);
+ byId("save").textContent=selectedId?"Сачувај измене":"Сачувај област";
 }
 function go(delta){
  if(draft.length&&!confirm("Одбацити незавршени полигон?"))return;
@@ -220,7 +232,7 @@ overlay.addEventListener("pointerdown",e=>{
   if(vertex>=target.length)return;
   drag={owner,vertex};overlay.setPointerCapture(e.pointerId);e.preventDefault();return;
  }
- if(selectedId)selectedId=null;
+ if(selectedId){selectedId=null;clearForm()}
  draft.push(coords(e));render();
 });
 overlay.addEventListener("pointermove",e=>{
@@ -245,9 +257,16 @@ overlay.addEventListener("pointerup",endDrag);
 overlay.addEventListener("pointercancel",endDrag);
 byId("prev").onclick=()=>go(-1);
 byId("next").onclick=()=>go(1);
-byId("cancel").onclick=()=>{draft=[];selectedId=null;render()};
+byId("cancel").onclick=()=>{draft=[];selectedId=null;clearForm();render()};
 byId("save").onclick=()=>{
  if(!loaded){alert("Сачекај потврду учитавања локалних података.");return}
+ if(selectedId){
+  const r=records.find(x=>x.id===selectedId);
+  if(r){r.description=byId("label").value.trim();r.orientation=byId("orientation").value;
+   r.note=byId("note").value.trim();r.kml_reference=byId("kml").value.trim()||null;
+   r.visual_category=byId("category").value;scheduleSave();}
+  selectedId=null;draft=[];clearForm();render();return;
+ }
  if(!validPolygon(draft)){alert("Полигон није исправан. Потребна су бар три темена без самопресецања.");return;}
  const f=active();counter++;
  records.push({id:"a"+counter+"_"+Date.now(),source_video:dataset.source_filename,frame_filename:f.filename,
@@ -255,7 +274,7 @@ byId("save").onclick=()=>{
   image_width_px:img.naturalWidth,image_height_px:img.naturalHeight,
   description:byId("label").value.trim(),orientation:byId("orientation").value,visual_category:byId("category").value,note:byId("note").value.trim(),
   kml_reference:byId("kml").value.trim()||null,evidence_status:"MANUAL_VISUAL_REVIEW_NOT_LAB_CONFIRMED"});
- scheduleSave();draft=[];selectedId=null;byId("label").value="";byId("note").value="";byId("kml").value="";byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;render();
+ scheduleSave();draft=[];selectedId=null;clearForm();render();
 };
 byId("export").onclick=()=>{
  const payload={schema_version:2,source_video:dataset.source_filename,review_type:"MANUAL_POLYGON_VISUAL_REVIEW",annotations:records};
