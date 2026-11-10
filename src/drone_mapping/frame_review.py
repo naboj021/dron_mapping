@@ -7,7 +7,6 @@ exported to a local JSON file by the reviewer.
 from __future__ import annotations
 
 import argparse
-import html
 import json
 from pathlib import Path
 
@@ -73,7 +72,7 @@ function rect(a,b){return {x:Math.min(a[0],b[0]),y:Math.min(a[1],b[1]),w:Math.ab
 function drawShape(r,kind){const n=document.createElementNS("http://www.w3.org/2000/svg","rect");n.setAttribute("x",r.x*1000);n.setAttribute("y",r.y*1000);n.setAttribute("width",r.w*1000);n.setAttribute("height",r.h*1000);if(kind==="draft"){n.setAttribute("stroke","#35f3ee")}box.appendChild(n)}
 function active(){return dataset.frames[index]}
 function render(){
- const f=active();img.src=encodeURIComponent(f.filename);byId("position").textContent=(index+1)+"/"+dataset.frames.length+" — "+f.filename+" — "+f.requested_seek_seconds+" s";
+ const f=active();const url=encodeURIComponent(f.filename);if(img.getAttribute("src")!==url)img.src=url;byId("position").textContent=(index+1)+"/"+dataset.frames.length+" — "+f.filename+" — "+f.requested_seek_seconds+" s";
  box.replaceChildren();
  const current=records.filter(r=>r.frame_filename===f.filename);
  for(const r of current)drawShape(r.box,"saved");
