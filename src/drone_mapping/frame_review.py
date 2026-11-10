@@ -21,9 +21,9 @@ header small{display:block;opacity:.84}main{display:grid;grid-template-columns:m
 section{background:white;padding:12px;border-radius:10px;box-shadow:0 1px 5px #0001}
 button,select,input,textarea{font:inherit}button{cursor:pointer;padding:7px 10px;margin:3px;border:1px solid #a9b8c6;border-radius:6px;background:#fff}
 button.primary{background:#176e57;color:white;border-color:#176e57}
-#viewer{width:100%;text-align:center;overflow:auto;background:#24313b;border-radius:6px}
-#framebox{position:relative;display:inline-block;vertical-align:top;max-width:100%;user-select:none;line-height:0}
-#photo{display:block;width:auto;height:auto;max-width:100%;max-height:calc(100vh - 190px);min-height:0;pointer-events:none}
+#viewer{width:100%;height:62vh;min-height:300px;max-height:750px;text-align:center;overflow:auto;background:#24313b;border-radius:6px}
+#framebox{position:relative;display:inline-block;vertical-align:top;user-select:none;line-height:0}
+#photo{display:block;max-width:none;max-height:none;pointer-events:none}
 #overlay{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;touch-action:none}
 #overlay polygon{fill:#ffb74d44;stroke:#ff9c1c;stroke-width:2;vector-effect:non-scaling-stroke;pointer-events:none}
 #overlay polygon.selected{stroke:#10c4cc;stroke-width:3}
@@ -43,8 +43,11 @@ textarea{height:70px;resize:vertical}
 <main>
 <section>
 <div><button id="prev">← Prethodni</button><button id="next">Sledeći →</button><strong id="position"></strong></div>
+<div><button id="zoomout" aria-label="Umanji fotografiju">−</button><input id="zoom" type="range" min="100" max="500" step="25" value="100" style="width:140px;vertical-align:middle" aria-label="Zum fotografije"><button id="zoomin" aria-label="Uvećaj fotografiju">+</button><button id="fit">Uklopi</button><span id="zoomvalue">100%</span></div>
 <div id="viewer"><div id="framebox"><img id="photo" alt="Kadar iz DJI snimka"><svg id="overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg></div></div>
-<p class="note">Klikni redom na uglove krova; završi poligon dugmetom. Klikni oznaku u listi i prevuci temena ili samu ivicu да је помериш. Jedan kadar može imati više poligona. Prikaz nije georeferenciranje.</p>
+<p class="note">Кликни редом на углове крова (најмање три), унеси податке па кликни „Сачувај област“. Зум користи контроле изнад слике; за померање увећане слике користи траке за померање. Одабери постојећу ознаку испод фотографије за измену темена или ивица.</p>
+<hr>
+<strong>Ознаке на овом кадру</strong><ol id="records"></ol>
 </section>
 <section>
 <strong>Nova oznaka</strong>
@@ -57,9 +60,7 @@ textarea{height:70px;resize:vertical}
 <option value="unknown">Neodređeno</option></select>
 <label>Opis / napomena</label><textarea id="note" placeholder="Šta se vidi; šta treba proveriti?"></textarea>
 <label>KML oznaka (opciono, ručna veza)</label><input id="kml" placeholder="ID placemarka ili originalni naziv">
-<div><button id="new">Нови полигон</button><button id="finish" disabled>Заврши полигон</button><button class="primary" id="save" disabled>Сачувај област</button><button id="cancel">Откажи цртање</button></div>
-<hr>
-<strong>Ознаке на овом кадру</strong><ol id="records"></ol>
+<div><button class="primary" id="save" disabled>Сачувај област</button><button id="cancel">Откажи цртање</button></div>
 <hr>
 <button class="primary" id="export">Извези annotations JSON</button>
 <label>Настави рад: учитај раније извезен JSON</label><input type="file" id="import" accept=".json,application/json">
@@ -68,10 +69,35 @@ textarea{height:70px;resize:vertical}
 <script>
 "use strict";
 const dataset=__DATA__;
-let index=0, records=[], draft=[], closed=false, selectedId=null, drag=null, counter=0, dirty=false;
+let index=0, records=[], draft=[], selectedId=null, drag=null, counter=0, dirty=false, zoom=1;
 const byId=id=>document.getElementById(id);
 byId("source").textContent=dataset.source_filename;
-const overlay=byId("overlay"), img=byId("photo");
+const overlay=byId("overlay"), img=byId("photo"), viewer=byId("viewer"), framebox=byId("framebox");
+function fitDimensions(){
+ if(!img.naturalWidth||!img.naturalHeight)return null;
+ const scale=Math.min(viewer.clientWidth/img.naturalWidth,viewer.clientHeight/img.naturalHeight,1);
+ return {w:img.naturalWidth*scale,h:img.naturalHeight*scale};
+}
+function updateZoom(keepCenter=true){
+ const base=fitDimensions();if(!base)return;
+ const cx=viewer.scrollLeft+viewer.clientWidth/2,cy=viewer.scrollTop+viewer.clientHeight/2;
+ const oldWidth=framebox.offsetWidth||base.w,oldHeight=framebox.offsetHeight||base.h;
+ const xRatio=cx/oldWidth,yRatio=cy/oldHeight;
+ const w=base.w*zoom,h=base.h*zoom;
+ framebox.style.width=w+"px";framebox.style.height=h+"px";
+ img.style.width=w+"px";img.style.height=h+"px";
+ byId("zoom").value=Math.round(zoom*100);
+ byId("zoomvalue").textContent=Math.round(zoom*100)+"%";
+ if(keepCenter){viewer.scrollLeft=xRatio*w-viewer.clientWidth/2;viewer.scrollTop=yRatio*h-viewer.clientHeight/2;}
+ else{viewer.scrollLeft=0;viewer.scrollTop=0;}
+}
+img.addEventListener("load",()=>updateZoom(false));
+window.addEventListener("resize",()=>updateZoom());
+byId("zoom").oninput=e=>{zoom=Number(e.target.value)/100;updateZoom()};
+byId("zoomin").onclick=()=>{zoom=Math.min(5,zoom+.25);updateZoom()};
+byId("zoomout").onclick=()=>{zoom=Math.max(1,zoom-.25);updateZoom()};
+byId("fit").onclick=()=>{zoom=1;updateZoom(false)};
+
 const clamp=v=>Math.max(0,Math.min(1,v));
 const active=()=>dataset.frames[index];
 const coords=e=>{const b=overlay.getBoundingClientRect();return [clamp((e.clientX-b.left)/b.width),clamp((e.clientY-b.top)/b.height)]};
@@ -114,17 +140,16 @@ function render(){
  for(const r of current){
   const li=document.createElement("li");
   const choose=document.createElement("button");choose.textContent=(r.id===selectedId?"✓ ":"Измени: ")+(r.description||r.visual_category);
-  choose.onclick=()=>{selectedId=r.id;draft=[];closed=false;render()};
+  choose.onclick=()=>{selectedId=selectedId===r.id?null:r.id;draft=[];render()};
   const del=document.createElement("button");del.textContent="Обриши";
   del.onclick=()=>{if(confirm("Обрисати ову ознаку?")){records=records.filter(x=>x.id!==r.id);dirty=true;if(selectedId===r.id)selectedId=null;render()}};
   li.append(choose,del);list.appendChild(li);
  }
- byId("finish").disabled=closed||draft.length<3;
- byId("save").disabled=!closed||draft.length<3;
+ byId("save").disabled=draft.length<3;
 }
 function go(delta){
  if(draft.length&&!confirm("Одбацити незавршени полигон?"))return;
- draft=[];closed=false;selectedId=null;index=Math.min(dataset.frames.length-1,Math.max(0,index+delta));render();
+ draft=[];selectedId=null;zoom=1;index=Math.min(dataset.frames.length-1,Math.max(0,index+delta));render();
 }
 function orient(a,b,c){return (b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0])}
 function cross(a,b,c,d){
@@ -155,8 +180,7 @@ overlay.addEventListener("pointerdown",e=>{
   if(vertex>=target.length)return;
   drag={owner,vertex};overlay.setPointerCapture(e.pointerId);e.preventDefault();return;
  }
- if(selectedId)return;
- if(closed)return;
+ if(selectedId)selectedId=null;
  draft.push(coords(e));render();
 });
 overlay.addEventListener("pointermove",e=>{
@@ -181,18 +205,16 @@ overlay.addEventListener("pointerup",endDrag);
 overlay.addEventListener("pointercancel",endDrag);
 byId("prev").onclick=()=>go(-1);
 byId("next").onclick=()=>go(1);
-byId("new").onclick=()=>{if(draft.length&&!confirm("Одбацити незавршени полигон?"))return;selectedId=null;draft=[];closed=false;render()};
-byId("finish").onclick=()=>{if(!validPolygon(draft)){alert("Полигон има премалу површину или самопресецање. Помери темена.");return}closed=true;render()};
-byId("cancel").onclick=()=>{draft=[];closed=false;selectedId=null;render()};
+byId("cancel").onclick=()=>{draft=[];selectedId=null;render()};
 byId("save").onclick=()=>{
- if(!closed||!validPolygon(draft))return;
+ if(!validPolygon(draft)){alert("Полигон није исправан. Потребна су бар три темена без самопресецања.");return;}
  const f=active();counter++;
  records.push({id:"a"+counter+"_"+Date.now(),source_video:dataset.source_filename,frame_filename:f.filename,
   requested_seek_seconds:f.requested_seek_seconds,points:draft.map(q=>q.slice()),
   image_width_px:img.naturalWidth,image_height_px:img.naturalHeight,
   description:byId("label").value.trim(),visual_category:byId("category").value,note:byId("note").value.trim(),
   kml_reference:byId("kml").value.trim()||null,evidence_status:"MANUAL_VISUAL_REVIEW_NOT_LAB_CONFIRMED"});
- dirty=true;draft=[];closed=false;byId("label").value="";byId("note").value="";byId("kml").value="";render();
+ dirty=true;draft=[];selectedId=null;byId("label").value="";byId("note").value="";byId("kml").value="";byId("category").selectedIndex=0;render();
 };
 byId("export").onclick=()=>{
  const payload={schema_version:2,source_video:dataset.source_filename,review_type:"MANUAL_POLYGON_VISUAL_REVIEW",annotations:records};
@@ -209,7 +231,7 @@ byId("import").onchange=async e=>{
   const converted=data.annotations.map((r,i)=>({...r,id:String(r.id||("import_"+i)),points:polygonPoints(r)}));
   if(converted.some(r=>!names.has(r.frame_filename)||r.points.length<3||r.points.some(p=>!Array.isArray(p)||p.length!==2||p.some(v=>!Number.isFinite(v)||v<0||v>1))||!validPolygon(r.points)))throw Error("Неисправне геометрије или називи");
   if((records.length||dirty)&&!confirm("Заменити текуће ознаке подацима из JSON-а?"))return;
-  records=converted;counter=records.length;selectedId=null;draft=[];closed=false;dirty=true;render();
+  records=converted;counter=records.length;selectedId=null;draft=[];dirty=true;render();
  }catch(err){alert("Увоз није успео: "+err.message)}
 };
 window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault();e.returnValue=""}});
