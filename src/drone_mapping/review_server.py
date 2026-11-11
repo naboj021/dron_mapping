@@ -40,6 +40,8 @@ def validate_payload(payload: object, source_video: str, frame_names: set[str]) 
             raise ValueError("Unknown evidence level")
         if level != "SUSPICION" and not str(item.get("evidence_reference") or "").strip():
             raise ValueError("Expert/laboratory claims need an evidence reference")
+        if level == "LAB_CONFIRMED" and not str(item.get("lab_accreditation") or "").strip():
+            raise ValueError("Accreditation is required for laboratory-confirmed claims")
         if item.get("construction_year") not in (None, ""):
             value = str(item["construction_year"])
             if not (value.isdigit() and len(value) == 4 and 1800 <= int(value) <= 2100):
@@ -48,8 +50,17 @@ def validate_payload(payload: object, source_video: str, frame_names: set[str]) 
             value = str(item["renovation_year"])
             if not (value.isdigit() and len(value) == 4 and 1800 <= int(value) <= 2100):
                 raise ValueError("Invalid renovation year")
-        if not isinstance(item, dict) or item.get("frame_filename") not in frame_names:
+        if item.get("frame_filename") not in frame_names:
             raise ValueError("Unknown frame or invalid annotation")
+        if item.get("surface_type", "roof") not in ("roof", "built_in"):
+            raise ValueError("Unsupported inventory tab")
+        if item.get("evidence_refs") is not None:
+            refs = item["evidence_refs"]
+            if not isinstance(refs, list) or len(refs) > 100:
+                raise ValueError("Invalid evidence attachments list")
+            for evidence in refs:
+                if not isinstance(evidence, dict) or not str(evidence.get("evidence_id") or "").startswith("EV-"):
+                    raise ValueError("Malformed evidence record")
         pts = item.get("points")
         box = item.get("box")
         if pts is not None:
@@ -68,7 +79,7 @@ def validate_payload(payload: object, source_video: str, frame_names: set[str]) 
                 raise ValueError("Invalid legacy box")
         else:
             raise ValueError("Missing annotation polygon")
-        for key in ("description", "note", "orientation", "visual_category", "reviewer", "evidence_level", "evidence_reference", "building_use", "ownership_type", "construction_year", "renovation_year", "material_location", "material_condition", "disturbance_risk", "surface_type"):
+        for key in ("description", "note", "orientation", "visual_category", "reviewer", "evidence_level", "evidence_reference", "evidence_issuer", "lab_accreditation", "product_type", "evidence_source", "asset_id", "component_id", "import_source_filename", "cadastral_parcel", "estimated_area_m2", "observation_date", "building_use", "ownership_type", "construction_year", "renovation_year", "material_location", "material_condition", "disturbance_risk", "surface_type"):
             if key in item and (not isinstance(item[key], str) or len(item[key]) > 5000):
                 raise ValueError("Invalid annotation field: " + key)
         if item.get("kml_reference") is not None and (
