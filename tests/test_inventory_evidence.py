@@ -36,8 +36,13 @@ def test_evidence_requires_reference_for_expert_and_lab():
         with pytest.raises(ValueError):
             validate_payload(data, "cvrcak.mp4", {"frame_0009.jpg"})
         data["annotations"][0]["evidence_reference"] = "evidence document"
+        if level == "LAB_CONFIRMED":
+            with pytest.raises(ValueError):
+                validate_payload(data, "cvrcak.mp4", {"frame_0009.jpg"})
+            data["annotations"][0]["lab_accreditation"] = "accreditation 123"
         validate_payload(data, "cvrcak.mp4", {"frame_0009.jpg"})
         del data["annotations"][0]["evidence_reference"]
+        data["annotations"][0].pop("lab_accreditation", None)
 
 
 def test_bad_construction_year_and_revision_rejected():
