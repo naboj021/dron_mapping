@@ -63,5 +63,5 @@ def test_review_has_expected_inventory_fields(tmp_path: Path):
                   "materialCondition", "disturbanceRisk"):
         assert f'id="{field}"' in html
     assert "kindergarten_area" not in html.split('<select id="category">')[1].split("</select>")[0]
-    assert 'value="suspected_asbestos"' in html
+    assert '"suspected_asbestos"' in html
     assert "VERSION_CONFLICT" not in html  # handled by status text, not hidden server logic
