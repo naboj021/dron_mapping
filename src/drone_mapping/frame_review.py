@@ -124,7 +124,7 @@ textarea{height:70px;resize:vertical}
 <script>
 "use strict";
 const dataset=__DATA__;
-let index=0, records=[], draft=[], selectedId=null, drag=null, counter=0, dirty=false, zoom=1;
+let index=0, records=[], draft=[], selectedId=null, drag=null, counter=0, dirty=false, zoom=1, surfaceType="roof", pendingEvidence=[];
 const localMode=location.protocol==="http:"&&location.hostname==="127.0.0.1";
 const reviewToken="__LOCAL_REVIEW_TOKEN__";
 let saveQueue=Promise.resolve(), editVersion=0, savedVersion=0, loaded=false, serverRevision=0;
@@ -156,6 +156,84 @@ byId("zoomin").onclick=()=>{zoom=Math.min(5,zoom+.25);updateZoom()};
 byId("zoomout").onclick=()=>{zoom=Math.max(1,zoom-.25);updateZoom()};
 byId("fit").onclick=()=>{zoom=1;updateZoom(false)};
 
+
+const ROOF_OPTIONS=[["suspected_asbestos","Сумња на азбест"],["other_roof","Други тип крова"],["replaced_roof_section","Замењени део крова"],["unknown","Неодређено"]];
+const BUILT_OPTIONS=[["suspected_asbestos","Сумња на азбест"],["other_built","Други материјал"],["replaced_built","Замењен део"],["unknown","Неодређено"]];
+const ROOF_MATERIALS=[["","Непознато"],["corrugated_sheet","Таласасте плоче"],["flat_sheet","Равне плоче"],["tiles","Цреп"],["metal","Метал"],["other","Друго"]];
+const BUILT_MATERIALS=[["","Непознато"],["wall_panel","Зидна / фасадна плоча"],["floor_tile","Подна облога"],["ceiling_panel","Плафонска плоча"],["insulation","Изолација"],["pipe","Цев / спојница"],["other","Други уграђени материјал"]];
+function setOptions(id,items,value){
+ const el=byId(id);el.replaceChildren();
+ for(const [key,title] of items){const opt=document.createElement("option");opt.value=key;opt.textContent=title;el.appendChild(opt)}
+ el.value=value||items[0][0];
+}
+function setTab(type,{reset=true}={}){
+ surfaceType=type;
+ byId("tabRoof").classList.toggle("active",type==="roof");
+ byId("tabBuilt").classList.toggle("active",type==="built_in");
+ byId("tabRoof").setAttribute("aria-selected",type==="roof");
+ byId("tabBuilt").setAttribute("aria-selected",type==="built_in");
+ byId("materialTypeLabel").textContent=type==="roof"?"Тип кровног покривача":"Место уградње / врста елемента";
+ setOptions("category",type==="roof"?ROOF_OPTIONS:BUILT_OPTIONS,"suspected_asbestos");
+ setOptions("materialType",type==="roof"?ROOF_MATERIALS:BUILT_MATERIALS,"");
+ if(reset){draft=[];selectedId=null;pendingEvidence=[];clearForm();}
+ render();
+}
+byId("tabRoof").onclick=()=>setTab("roof");
+byId("tabBuilt").onclick=()=>setTab("built_in");
+function makeId(prefix){
+ if(window.crypto&&crypto.randomUUID)return prefix+"-"+crypto.randomUUID();
+ return prefix+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,12);
+}
+function ensureIds(record,sourceFile=""){
+ let changed=false;
+ if(!record.surface_type){record.surface_type="roof";changed=true;}
+ if(!record.asset_id){
+  record.asset_id=record.kml_reference?"KML:"+record.kml_reference:makeId(record.surface_type==="roof"?"AZ-R":"AZ-U");changed=true;
+ }
+ if(!record.component_id){record.component_id=makeId("PART");changed=true;}
+ if(!record.import_source_filename&&sourceFile){record.import_source_filename=sourceFile;changed=true;}
+ if(!record.evidence_level){record.evidence_level="SUSPICION";changed=true;}
+ if(!record.evidence_refs){record.evidence_refs=[];changed=true;}
+ return changed;
+}
+function showAttachments(){
+ const root=byId("evidenceList");root.replaceChildren();
+ const record=records.find(r=>r.id===selectedId);
+ const items=record?(record.evidence_refs||[]):pendingEvidence;
+ if(!items.length){root.textContent="Нема приложених датотека";return}
+ for(const item of items){
+  const line=document.createElement("div");
+  line.textContent=(item.original_filename||item.evidence_id)+" · "+(item.source_type||"извор није наведен")+" · SHA-256 "+String(item.sha256||"").slice(0,12)+"…";
+  root.appendChild(line);
+ }
+}
+byId("uploadEvidence").onclick=async()=>{
+ if(!localMode){alert("Покрени локални сервер за додавање датотека.");return;}
+ if(!loaded){alert("База још није учитана.");return;}
+ const file=byId("evidenceFile").files[0];if(!file){alert("Изабери датотеку.");return;}
+ if(file.size>20_000_000||file.size===0){alert("Датотека мора бити између 1B и 20MB.");return;}
+ const btn=byId("uploadEvidence");btn.disabled=true;
+ try{
+  const response=await fetch("/api/evidence",{method:"POST",headers:{
+   "X-Review-Token":reviewToken,"X-Evidence-Filename":encodeURIComponent(file.name),
+   "Content-Type":"application/octet-stream"
+  },body:await file.arrayBuffer()});
+  if(!response.ok)throw Error(await response.text());
+  const info=await response.json();
+  info.source_type=byId("evidenceSource").value;
+  info.source_reference=byId("evidenceReference").value.trim();
+  const record=records.find(r=>r.id===selectedId);
+  if(record){record.evidence_refs=record.evidence_refs||[];record.evidence_refs.push(info);scheduleSave();}
+  else pendingEvidence.push(info);
+  byId("evidenceFile").value="";showAttachments();
+  status(record?"Прилог додат; чување измена…":"Прилог привремено додат. Сачувај област да га повежеш.");
+ }catch(err){alert("Неуспешно додавање прилога: "+err.message)}
+ finally{btn.disabled=false}
+};
+byId("kml").addEventListener("input",()=>{
+ if(!selectedId)byId("assetId").value=byId("kml").value.trim()?"KML:"+byId("kml").value.trim():"Аутоматски при чувању";
+});
+
 const clamp=v=>Math.max(0,Math.min(1,v));
 const active=()=>dataset.frames[index];
 function status(message){byId("saveStatus").textContent=message}
@@ -185,7 +263,9 @@ async function loadSaved(){
   if(!response.ok)throw Error(await response.text());
   const data=await response.json();
   if(data.source_video!==dataset.source_filename||!Array.isArray(data.annotations))throw Error("Неодговарајућа датотека");
-  records=data.annotations;serverRevision=data.revision||0;counter=records.length;savedVersion=editVersion;dirty=false;loaded=true;
+  records=data.annotations;serverRevision=data.revision||0;counter=records.length;
+  const migrated=records.some(r=>ensureIds(r));
+  if(migrated&&localMode){scheduleSave();}savedVersion=editVersion;dirty=false;loaded=true;
   status("Локално чување укључено ✓ ("+records.length+" ознака учитано)");
  }catch(err){status("Не могу да учитам локалне ознаке: "+err.message+". Не почињи анотацију.");}
  finally{render()}
@@ -219,10 +299,18 @@ function draw(points,kind,owner){
  }
 }
 function clearForm(){
+ byId("assetId").value="Аутоматски при чувању";
  byId("label").value="";byId("note").value="";byId("kml").value="";
- byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;byId("evidenceLevel").value="SUSPICION";byId("evidenceReference").value="";byId("reviewer").value="";byId("buildingUse").value="";byId("ownershipType").value="";byId("constructionYear").value="";byId("renovationYear").value="";byId("materialCondition").value="";byId("disturbanceRisk").value="";
+ byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;byId("evidenceLevel").value="SUSPICION";byId("evidenceReference").value="";byId("reviewer").value="";byId("buildingUse").value="";byId("ownershipType").value="";byId("constructionYear").value="";byId("renovationYear").value="";byId("materialCondition").value="";byId("disturbanceRisk").value="";byId("materialType").selectedIndex=0;byId("evidenceSource").value="drone";byId("cadastralParcel").value="";byId("estimatedArea").value="";byId("observationDate").value="";byId("importSource").value="";showAttachments();
 }
 function loadForm(r){
+ byId("assetId").value=r.asset_id||"";
+ byId("materialType").value=r.product_type||"";
+ byId("evidenceSource").value=r.evidence_source||"drone";
+ byId("cadastralParcel").value=r.cadastral_parcel||"";
+ byId("estimatedArea").value=r.estimated_area_m2||"";
+ byId("observationDate").value=r.observation_date||"";
+ byId("importSource").value=r.import_source_filename||"";
  byId("label").value=r.description||"";
  byId("note").value=r.note||"";
  byId("kml").value=r.kml_reference||"";
@@ -243,14 +331,14 @@ function render(){
  if(img.getAttribute("src")!==url)img.src=url;
  byId("position").textContent=(index+1)+"/"+dataset.frames.length+" — "+f.filename+" — "+f.requested_seek_seconds+" s";
  overlay.replaceChildren();
- const current=records.filter(r=>r.frame_filename===f.filename);
+ const current=records.filter(r=>r.frame_filename===f.filename&&(r.surface_type||"roof")===surfaceType);
  for(const r of current)draw(polygonPoints(r),r.id===selectedId?"selected":"saved",r.id);
  if(draft.length)draw(draft,"draft","draft");
  const list=byId("records");list.replaceChildren();
  for(const r of current){
   const li=document.createElement("li");
   const choose=document.createElement("button");choose.textContent=(r.id===selectedId?"✓ ":"Измени: ")+(r.orientation?"["+r.orientation+"] ":"")+(r.description||r.visual_category)+(r.kml_reference?" · KML "+r.kml_reference:" · није у KML-у");
-  choose.onclick=()=>{selectedId=selectedId===r.id?null:r.id;draft=[];if(selectedId)loadForm(r);else clearForm();render()};
+  choose.onclick=()=>{selectedId=selectedId===r.id?null:r.id;draft=[];pendingEvidence=[];if(selectedId)loadForm(r);else clearForm();showAttachments();render()};
   const del=document.createElement("button");del.textContent="Обриши";
   del.onclick=()=>{if(confirm("Обрисати ову ознаку?")){records=records.filter(x=>x.id!==r.id);scheduleSave();if(selectedId===r.id)selectedId=null;render()}};
   li.append(choose,del);list.appendChild(li);
