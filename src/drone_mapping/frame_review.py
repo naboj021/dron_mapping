@@ -13,7 +13,7 @@ from pathlib import Path
 _HTML = r"""<!doctype html>
 <html lang="sr">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AZBEST MAPA | Lokalni pregled kadrova</title>
+<title>Inventar azbesta | Lokalni pregled kadrova</title>
 <style>
 :root{font-family:system-ui,Segoe UI,sans-serif;color:#1b2733;background:#f1f3f6}
 body{margin:0}header{background:#173047;color:#fff;padding:12px 20px}
@@ -43,7 +43,7 @@ textarea{height:70px;resize:vertical}
 .note{font-size:13px;color:#5d6570}
 @media(max-width:850px){main{display:block}section{margin-bottom:12px}}
 </style></head><body>
-<header><strong>AZBEST MAPA — pregled kadrova (lokalno)</strong><small id="source"></small></header>
+<header><strong>Inventar azbesta — pregled kadrova (lokalno)</strong><small id="source"></small></header>
 <main>
 <section>
 <div><button id="prev">← Prethodni</button><button id="next">Sledeći →</button><strong id="position"></strong></div>
