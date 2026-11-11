@@ -264,9 +264,9 @@ async function loadSaved(){
   const data=await response.json();
   if(data.source_video!==dataset.source_filename||!Array.isArray(data.annotations))throw Error("Неодговарајућа датотека");
   records=data.annotations;serverRevision=data.revision||0;counter=records.length;
-  const migrated=records.some(r=>ensureIds(r));
+  let migrated=false;for(const record of records){if(ensureIds(record))migrated=true;}
   if(migrated&&localMode){scheduleSave();}savedVersion=editVersion;dirty=false;loaded=true;
-  status("Локално чување укључено ✓ ("+records.length+" ознака учитано)");
+  if(!migrated)status("Локално чување укључено ✓ ("+records.length+" ознака учитано)");
  }catch(err){status("Не могу да учитам локалне ознаке: "+err.message+". Не почињи анотацију.");}
  finally{render()}
 }
@@ -379,7 +379,7 @@ overlay.addEventListener("pointerdown",e=>{
   if(vertex>=target.length)return;
   drag={owner,vertex};overlay.setPointerCapture(e.pointerId);e.preventDefault();return;
  }
- if(selectedId){selectedId=null;clearForm()}
+ if(selectedId){selectedId=null;pendingEvidence=[];clearForm()}
  draft.push(coords(e));render();
 });
 overlay.addEventListener("pointermove",e=>{
@@ -404,7 +404,7 @@ overlay.addEventListener("pointerup",endDrag);
 overlay.addEventListener("pointercancel",endDrag);
 byId("prev").onclick=()=>go(-1);
 byId("next").onclick=()=>go(1);
-byId("cancel").onclick=()=>{draft=[];selectedId=null;clearForm();render()};
+byId("cancel").onclick=()=>{draft=[];selectedId=null;pendingEvidence=[];clearForm();render()};
 byId("save").onclick=()=>{
  if(!loaded){alert("Сачекај потврду учитавања локалних података.");return}
  if(selectedId){
@@ -413,6 +413,12 @@ byId("save").onclick=()=>{
   }
   const r=records.find(x=>x.id===selectedId);
   if(r){
+   if(!r.asset_id)ensureIds(r);
+   r.product_type=byId("materialType").value;
+   r.evidence_source=byId("evidenceSource").value;
+   r.cadastral_parcel=byId("cadastralParcel").value.trim();
+   r.estimated_area_m2=byId("estimatedArea").value.trim();
+   r.observation_date=byId("observationDate").value;
    r.description=byId("label").value.trim();r.orientation=byId("orientation").value;
    r.note=byId("note").value.trim();r.kml_reference=byId("kml").value.trim()||null;
    r.visual_category=byId("category").value;
@@ -427,14 +433,24 @@ byId("save").onclick=()=>{
    r.disturbance_risk=byId("disturbanceRisk").value;
    scheduleSave();
   }
-  selectedId=null;draft=[];clearForm();render();return;
+  selectedId=null;draft=[];pendingEvidence=[];clearForm();render();return;
  }
  if(byId("evidenceLevel").value!=="SUSPICION"&&!byId("evidenceReference").value.trim()){alert("Виши ниво доказа захтева референцу.");return}
  if(!validPolygon(draft)){alert("Полигон није исправан. Потребна су бар три темена без самопресецања.");return;}
  const f=active();counter++;
- records.push({id:"a"+counter+"_"+Date.now(),source_video:dataset.source_filename,frame_filename:f.filename,
+ const kml=byId("kml").value.trim();
+ const generatedId=kml?"KML:"+kml:makeId(surfaceType==="roof"?"AZ-R":"AZ-U");
+ records.push({id:makeId("ANN"),asset_id:generatedId,component_id:makeId("PART"),
+  surface_type:surfaceType,source_video:dataset.source_filename,frame_filename:f.filename,
   requested_seek_seconds:f.requested_seek_seconds,points:draft.map(q=>q.slice()),
   image_width_px:img.naturalWidth,image_height_px:img.naturalHeight,
+  import_source_filename:byId("importSource").value||"",
+  product_type:byId("materialType").value,
+  evidence_source:byId("evidenceSource").value,
+  evidence_refs:pendingEvidence.slice(),
+  cadastral_parcel:byId("cadastralParcel").value.trim(),
+  estimated_area_m2:byId("estimatedArea").value.trim(),
+  observation_date:byId("observationDate").value,
   description:byId("label").value.trim(),orientation:byId("orientation").value,visual_category:byId("category").value,note:byId("note").value.trim(),
   evidence_level:byId("evidenceLevel").value.trim(),
   evidence_reference:byId("evidenceReference").value.trim(),
@@ -446,7 +462,7 @@ byId("save").onclick=()=>{
   material_condition:byId("materialCondition").value.trim(),
   disturbance_risk:byId("disturbanceRisk").value.trim(),
   kml_reference:byId("kml").value.trim()||null,evidence_status:"MANUAL_VISUAL_REVIEW_NOT_LAB_CONFIRMED"});
- scheduleSave();draft=[];selectedId=null;clearForm();render();
+ scheduleSave();draft=[];selectedId=null;pendingEvidence=[];clearForm();showAttachments();render();
 };
 byId("export").onclick=()=>{
  const payload={schema_version:3,source_video:dataset.source_filename,review_type:"MANUAL_POLYGON_VISUAL_REVIEW",revision:serverRevision,annotations:records};
@@ -460,13 +476,15 @@ byId("import").onchange=async e=>{
   const data=JSON.parse(await file.text());
   if(data.source_video!==dataset.source_filename||!Array.isArray(data.annotations))throw Error("Неодговарајући извор или формат");
   const names=new Set(dataset.frames.map(f=>f.filename));
-  const converted=data.annotations.map((r,i)=>({...r,id:String(r.id||("import_"+i)),points:polygonPoints(r)}));
+  const converted=data.annotations.map((r,i)=>({...r,id:String(r.id||makeId("ANN")),points:polygonPoints(r),import_source_filename:r.import_source_filename||file.name}));
+  for(const r of converted)ensureIds(r,file.name);
   if(converted.some(r=>!names.has(r.frame_filename)||r.points.length<3||r.points.some(p=>!Array.isArray(p)||p.length!==2||p.some(v=>!Number.isFinite(v)||v<0||v>1))||!validPolygon(r.points)))throw Error("Неисправне геометрије или називи");
   if((records.length||dirty)&&!confirm("Заменити текуће ознаке подацима из JSON-а?"))return;
-  records=converted;counter=records.length;selectedId=null;draft=[];scheduleSave();render();
+  records=converted;counter=records.length;selectedId=null;draft=[];pendingEvidence=[];scheduleSave();clearForm();render();
  }catch(err){alert("Увоз није успео: "+err.message)}
 };
 window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault();e.returnValue=""}});
+setTab("roof",{reset:false});
 loadSaved();
 </script></body></html>"""
 
