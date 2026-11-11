@@ -195,7 +195,7 @@ function draw(points,kind,owner){
 }
 function clearForm(){
  byId("label").value="";byId("note").value="";byId("kml").value="";
- byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;byId("evidenceLevel").value="";byId("evidenceReference").value="";byId("reviewer").value="";byId("buildingUse").value="";byId("ownershipType").value="";byId("constructionYear").value="";byId("renovationYear").value="";byId("materialCondition").value="";byId("disturbanceRisk").value="";
+ byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;byId("evidenceLevel").value="SUSPICION";byId("evidenceReference").value="";byId("reviewer").value="";byId("buildingUse").value="";byId("ownershipType").value="";byId("constructionYear").value="";byId("renovationYear").value="";byId("materialCondition").value="";byId("disturbanceRisk").value="";
 }
 function loadForm(r){
  byId("label").value=r.description||"";
@@ -203,7 +203,7 @@ function loadForm(r){
  byId("kml").value=r.kml_reference||"";
  byId("orientation").value=r.orientation||"";
  byId("category").value=["suspected_fibrecement","kindergarten_area"].includes(r.visual_category)?"suspected_asbestos":(r.visual_category||"suspected_asbestos");
- byId("evidenceLevel").value=r.evidence_level||"";
+ byId("evidenceLevel").value=r.evidence_level||"SUSPICION";
  byId("evidenceReference").value=r.evidence_reference||"";
  byId("reviewer").value=r.reviewer||"";
  byId("buildingUse").value=r.building_use||"";
