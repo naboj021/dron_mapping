@@ -86,6 +86,9 @@ textarea{height:70px;resize:vertical}
 <label>Број документа / линк / референца доказа</label><input id="evidenceReference" placeholder="Обавезно за стручну процену и лабораторијску потврду">
 <label>Издавалац документа / лабораторија / стручњак</label><input id="evidenceIssuer" placeholder="Назив установе или име стручног лица">
 <label>Акредитација лабораторије (за лабораторијску потврду)</label><input id="labAccreditation" placeholder="Број акредитације или референца акредитационог тела">
+<label>URL доказа (Google Drive, катастар или други сајт)</label><input id="evidenceUrl" type="url" placeholder="https://...">
+<label>Опис документа / доказа</label><input id="evidenceTitle" placeholder="нпр. Решење инспекције 2026">
+<button id="addEvidenceUrl" type="button">Додај URL као доказ</button>
 <label>Додај датотеку доказа (локално, до 20 MB)</label><input id="evidenceFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,.txt">
 <button id="uploadEvidence" type="button">Приложи датотеку</button>
 <div id="evidenceList" class="note">Нема прилога</div>
@@ -114,16 +117,21 @@ textarea{height:70px;resize:vertical}
 <label>Година изградње</label><input id="constructionYear" inputmode="numeric" placeholder="Само ако је позната">
 <label>Последња позната обнова (година)</label><input id="renovationYear" inputmode="numeric" placeholder="Само ако је позната">
 <details><summary>Додатни подаци инвентара</summary>
-<label>Катастарска парцела / КО</label><input id="cadastralParcel">
+<label>Улица (ПРИВАТНО — не објављивати)</label><input id="privateStreet" autocomplete="off" placeholder="За интерну евиденцију">
+<label>Кућни број (ПРИВАТНО)</label><input id="privateHouseNumber" autocomplete="off">
+<label>Насеље / место (интерно)</label><input id="privateLocality" autocomplete="off">
+<label>Катастарска општина (КО)</label><input id="cadastralMunicipality">
+<label>Катастарска парцела / број парцеле</label><input id="cadastralParcel">
+<p class="note">Документ катастра додај у делу „Докази“ (извор: Катастар), као датотеку или URL. Адреса и парцела могу идентификовати приватни објекат и остају у приватној бази.</p>
 <label>Процењена површина материјала (m²)</label><input id="estimatedArea" inputmode="decimal" placeholder="Празно ако није измерено">
 <label>Датум посматрања / извора</label><input id="observationDate" type="date">
 <label>Изворни документ / датотека из које је увезено</label><input id="importSource" readonly>
 </details>
 <div><button class="primary" id="save" disabled>Сачувај област</button><button id="cancel">Откажи цртање</button></div>
 <hr>
-<div id="saveStatus" role="status" style="font-weight:600;margin:8px 0">Провера локалног чувања…</div><button class="primary" id="export">Извези annotations JSON (резервна копија)</button>
+<div id="saveStatus" role="status" style="font-weight:600;margin:8px 0">Провера локалног чувања…</div><button class="primary" id="export">Извези ПРИВАТНУ резервну копију JSON</button><button id="exportPublic" type="button">Извези јавни статистички преглед (без адреса и координата)</button>
 <label>Настави рад: учитај раније извезен JSON</label><input type="file" id="import" accept=".json,application/json">
-<p class="note">Када је страница отворена преко локалног http://127.0.0.1 сервера, свака измена се аутоматски чува у локални JSON на диску. На file:// страници нема аутоматског чувања: обавезно извези JSON. Ниједан податак се не шаље на интернет. Означени материјал није лабораторијски потврђен.</p>
+<p class="note">Када је страница отворена преко локалног http://127.0.0.1 сервера, свака измена се аутоматски чува у локални JSON на диску. На file:// страници нема аутоматског чувања: обавезно извези JSON. Локални сервер не шаље податке на интернет. ПРИВАТНИ JSON извоз садржи адресе, парцеле, изворне снимке и линкове — не објављивати. Јавни статистички преглед не садржи адресе, парцеле, изворне снимке нити координате. Визуелна сумња није лабораторијска потврда.</p>
 </section></main>
 <script>
 "use strict";
@@ -205,13 +213,48 @@ function showAttachments(){
  const root=byId("evidenceList");root.replaceChildren();
  const record=records.find(r=>r.id===selectedId);
  const items=record?(record.evidence_refs||[]):pendingEvidence;
- if(!items.length){root.textContent="Нема приложених датотека";return}
+ if(!items.length){root.textContent="Нема доказа; може се додати више линкова и датотека.";return}
  for(const item of items){
   const line=document.createElement("div");
-  line.textContent=(item.original_filename||item.evidence_id)+" · "+(item.source_type||"извор није наведен")+" · SHA-256 "+String(item.sha256||"").slice(0,12)+"…";
-  root.appendChild(line);
+  const title=item.title||item.original_filename||item.url||item.evidence_id;
+  line.appendChild(document.createTextNode(title+" · "+(item.source_type||"непознат извор")+" · "));
+  if(item.kind==="url"){
+   const anchor=document.createElement("a");anchor.href=item.url;anchor.target="_blank";
+   anchor.rel="noopener noreferrer";anchor.textContent="Отвори URL";line.appendChild(anchor);
+  }else{
+   line.appendChild(document.createTextNode("локално ("+String(item.sha256||"").slice(0,12)+"…)"));
+  }
+  const remove=document.createElement("button");remove.type="button";remove.textContent="Уклони везу";
+  remove.onclick=()=>{
+   if(!confirm("Уклонити ову везу из записа? Локална датотека, ако постоји, остаје у приватном складишту."))return;
+   if(record){record.evidence_refs=record.evidence_refs.filter(x=>x!==item);scheduleSave();}
+   else pendingEvidence=pendingEvidence.filter(x=>x!==item);
+   showAttachments();
+  };
+  line.appendChild(remove);root.appendChild(line);
  }
 }
+byId("addEvidenceUrl").onclick=()=>{
+ if(!loaded){alert("Сачекај учитавање базе.");return}
+ const raw=byId("evidenceUrl").value.trim();
+ let address;
+ try{address=new URL(raw);if(!["https:","http:"].includes(address.protocol)||!address.hostname)throw Error("URL мора бити http(s)");}
+ catch(e){alert("Унеси исправан http:// или https:// URL.");return}
+ if(raw.length>2048){alert("URL је предугачак.");return}
+ const ref={
+  evidence_id:makeId("URL"),kind:"url",url:address.href,
+  title:byId("evidenceTitle").value.trim()||address.hostname,
+  source_type:byId("evidenceSource").value,
+  source_reference:byId("evidenceReference").value.trim(),
+  added_at:new Date().toISOString(),
+  retrieval_status:"LINK_ONLY_NOT_ARCHIVED"
+ };
+ const record=records.find(r=>r.id===selectedId);
+ if(record){record.evidence_refs=record.evidence_refs||[];record.evidence_refs.push(ref);scheduleSave();}
+ else pendingEvidence.push(ref);
+ byId("evidenceUrl").value="";byId("evidenceTitle").value="";
+ showAttachments();
+};
 byId("uploadEvidence").onclick=async()=>{
  if(!localMode){alert("Покрени локални сервер за додавање датотека.");return;}
  if(!loaded){alert("База још није учитана.");return;}
@@ -225,12 +268,14 @@ byId("uploadEvidence").onclick=async()=>{
   },body:await file.arrayBuffer()});
   if(!response.ok)throw Error(await response.text());
   const info=await response.json();
+  info.kind="file";info.title=byId("evidenceTitle").value.trim()||file.name;
+  info.added_at=new Date().toISOString();
   info.source_type=byId("evidenceSource").value;
   info.source_reference=byId("evidenceReference").value.trim();
   const record=records.find(r=>r.id===selectedId);
   if(record){record.evidence_refs=record.evidence_refs||[];record.evidence_refs.push(info);scheduleSave();}
   else pendingEvidence.push(info);
-  byId("evidenceFile").value="";showAttachments();
+  byId("evidenceFile").value="";byId("evidenceTitle").value="";showAttachments();
   status(record?"Прилог додат; чување измена…":"Прилог привремено додат. Сачувај област да га повежеш.");
  }catch(err){alert("Неуспешно додавање прилога: "+err.message)}
  finally{btn.disabled=false}
@@ -306,7 +351,7 @@ function draw(points,kind,owner){
 function clearForm(){
  byId("assetId").value="Аутоматски при чувању";byId("reuseAssetId").value="";byId("kmlSource").value="";
  byId("label").value="";byId("note").value="";byId("kml").value="";
- byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;byId("evidenceLevel").value="SUSPICION";byId("evidenceReference").value="";byId("evidenceIssuer").value="";byId("labAccreditation").value="";byId("reviewer").value="";byId("buildingUse").value="";byId("ownershipType").value="";byId("constructionYear").value="";byId("renovationYear").value="";byId("materialCondition").value="";byId("disturbanceRisk").value="";byId("materialType").selectedIndex=0;byId("evidenceSource").value="drone";byId("cadastralParcel").value="";byId("estimatedArea").value="";byId("observationDate").value="";byId("importSource").value="";showAttachments();
+ byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;byId("evidenceLevel").value="SUSPICION";byId("evidenceReference").value="";byId("evidenceIssuer").value="";byId("labAccreditation").value="";byId("reviewer").value="";byId("buildingUse").value="";byId("ownershipType").value="";byId("constructionYear").value="";byId("renovationYear").value="";byId("materialCondition").value="";byId("disturbanceRisk").value="";byId("materialType").selectedIndex=0;byId("evidenceSource").value="drone";byId("cadastralParcel").value="";byId("cadastralMunicipality").value="";byId("privateStreet").value="";byId("privateHouseNumber").value="";byId("privateLocality").value="";byId("evidenceUrl").value="";byId("evidenceTitle").value="";byId("estimatedArea").value="";byId("observationDate").value="";byId("importSource").value="";showAttachments();
 }
 function loadForm(r){
  byId("assetId").value=r.asset_id||"";
@@ -315,6 +360,10 @@ function loadForm(r){
  byId("materialType").value=r.product_type||"";
  byId("evidenceSource").value=r.evidence_source||"drone";
  byId("cadastralParcel").value=r.cadastral_parcel||"";
+ byId("cadastralMunicipality").value=r.cadastral_municipality||"";
+ byId("privateStreet").value=r.private_street||"";
+ byId("privateHouseNumber").value=r.private_house_number||"";
+ byId("privateLocality").value=r.private_locality||"";
  byId("estimatedArea").value=r.estimated_area_m2||"";
  byId("observationDate").value=r.observation_date||"";
  byId("importSource").value=r.import_source_filename||"";
@@ -431,6 +480,10 @@ byId("save").onclick=()=>{
    r.evidence_source=byId("evidenceSource").value;
    r.kml_source_filename=byId("kmlSource").value.trim();
    r.cadastral_parcel=byId("cadastralParcel").value.trim();
+   r.cadastral_municipality=byId("cadastralMunicipality").value.trim();
+   r.private_street=byId("privateStreet").value.trim();
+   r.private_house_number=byId("privateHouseNumber").value.trim();
+   r.private_locality=byId("privateLocality").value.trim();
    r.estimated_area_m2=byId("estimatedArea").value.trim();
    r.observation_date=byId("observationDate").value;
    r.description=byId("label").value.trim();r.orientation=byId("orientation").value;
@@ -468,6 +521,10 @@ byId("save").onclick=()=>{
   evidence_source:byId("evidenceSource").value,
   evidence_refs:pendingEvidence.slice(),
   cadastral_parcel:byId("cadastralParcel").value.trim(),
+  cadastral_municipality:byId("cadastralMunicipality").value.trim(),
+  private_street:byId("privateStreet").value.trim(),
+  private_house_number:byId("privateHouseNumber").value.trim(),
+  private_locality:byId("privateLocality").value.trim(),
   estimated_area_m2:byId("estimatedArea").value.trim(),
   observation_date:byId("observationDate").value,
   description:byId("label").value.trim(),orientation:byId("orientation").value,visual_category:byId("category").value,note:byId("note").value.trim(),
@@ -484,6 +541,19 @@ byId("save").onclick=()=>{
   disturbance_risk:byId("disturbanceRisk").value.trim(),
   kml_reference:byId("kml").value.trim()||null,evidence_status:"MANUAL_VISUAL_REVIEW_NOT_LAB_CONFIRMED"});
  scheduleSave();draft=[];selectedId=null;pendingEvidence=[];clearForm();showAttachments();render();
+};
+byId("exportPublic").onclick=()=>{
+ const counts={};
+ for(const r of records){
+  const category=(r.surface_type||"roof")+":"+(r.visual_category||"unknown")+":"+(r.evidence_level||"SUSPICION");
+  counts[category]=(counts[category]||0)+1;
+ }
+ const report={format:"PUBLIC_AGGREGATED_COUNTS_ONLY",generated_at:new Date().toISOString(),
+  warning:"This counts visual observations, not unique buildings or laboratory confirmations.",
+  total_annotations:records.length,by_category:counts};
+ const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:"application/json"}));
+ const a=document.createElement("a");a.href=url;a.download="azbest_public_aggregate.json";a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
 byId("export").onclick=()=>{
  const payload={schema_version:3,source_video:dataset.source_filename,review_type:"MANUAL_POLYGON_VISUAL_REVIEW",revision:serverRevision,annotations:records};
