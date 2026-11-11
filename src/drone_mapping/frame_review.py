@@ -59,7 +59,9 @@ textarea{height:70px;resize:vertical}
 <button id="tabBuilt" type="button" role="tab" aria-selected="false">Уграђени азбест: зидови / подови / друго</button>
 </div>
 <label>Инвентарски ID објекта</label><input id="assetId" readonly placeholder="Аутоматски након чувања">
+<label>Повежи са већ постојећим ID објекта (опционо)</label><input id="reuseAssetId" list="knownAssetIds" placeholder="Изабери постојећи ID за другу целину истог објекта"><datalist id="knownAssetIds"></datalist>
 <label>KML ID (само ако постоји у изворном KML-у)</label><input id="kml" placeholder="Ако није у KML-у, остави празно">
+<label>Изворна KML датотека</label><input id="kmlSource" placeholder="нпр. Azbest.kml; празно ако није из KML-а">
 <label>Положај дела објекта / оријентација</label><select id="orientation">
 <option value="">Непознато</option><option value="N">Север</option><option value="NE">Североисток</option>
 <option value="E">Исток</option><option value="SE">Југоисток</option><option value="S">Југ</option>
@@ -193,6 +195,7 @@ function ensureIds(record,sourceFile=""){
   record.asset_id=record.kml_reference?"KML:"+record.kml_reference:makeId(record.surface_type==="roof"?"AZ-R":"AZ-U");changed=true;
  }
  if(!record.component_id){record.component_id=makeId("PART");changed=true;}
+ if(record.kml_reference&&!record.kml_source_filename){record.kml_source_filename="Azbest.kml";changed=true;}
  if(!record.import_source_filename&&sourceFile){record.import_source_filename=sourceFile;changed=true;}
  if(!record.evidence_level){record.evidence_level="SUSPICION";changed=true;}
  if(!record.evidence_refs){record.evidence_refs=[];changed=true;}
@@ -301,12 +304,14 @@ function draw(points,kind,owner){
  }
 }
 function clearForm(){
- byId("assetId").value="Аутоматски при чувању";
+ byId("assetId").value="Аутоматски при чувању";byId("reuseAssetId").value="";byId("kmlSource").value="";
  byId("label").value="";byId("note").value="";byId("kml").value="";
  byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;byId("evidenceLevel").value="SUSPICION";byId("evidenceReference").value="";byId("evidenceIssuer").value="";byId("labAccreditation").value="";byId("reviewer").value="";byId("buildingUse").value="";byId("ownershipType").value="";byId("constructionYear").value="";byId("renovationYear").value="";byId("materialCondition").value="";byId("disturbanceRisk").value="";byId("materialType").selectedIndex=0;byId("evidenceSource").value="drone";byId("cadastralParcel").value="";byId("estimatedArea").value="";byId("observationDate").value="";byId("importSource").value="";showAttachments();
 }
 function loadForm(r){
  byId("assetId").value=r.asset_id||"";
+ byId("reuseAssetId").value=r.asset_id||"";
+ byId("kmlSource").value=r.kml_source_filename||"";
  byId("materialType").value=r.product_type||"";
  byId("evidenceSource").value=r.evidence_source||"drone";
  byId("cadastralParcel").value=r.cadastral_parcel||"";
@@ -331,6 +336,8 @@ function loadForm(r){
  byId("disturbanceRisk").value=r.disturbance_risk||"";
 }
 function render(){
+ const known=byId("knownAssetIds");known.replaceChildren();
+ for(const id of new Set(records.map(r=>r.asset_id).filter(Boolean))){const opt=document.createElement("option");opt.value=id;known.appendChild(opt)}
  const f=active();const url=encodeURIComponent(f.filename);
  if(img.getAttribute("src")!==url)img.src=url;
  byId("position").textContent=(index+1)+"/"+dataset.frames.length+" — "+f.filename+" — "+f.requested_seek_seconds+" s";
@@ -422,6 +429,7 @@ byId("save").onclick=()=>{
    if(!r.asset_id)ensureIds(r);
    r.product_type=byId("materialType").value;
    r.evidence_source=byId("evidenceSource").value;
+   r.kml_source_filename=byId("kmlSource").value.trim();
    r.cadastral_parcel=byId("cadastralParcel").value.trim();
    r.estimated_area_m2=byId("estimatedArea").value.trim();
    r.observation_date=byId("observationDate").value;
@@ -447,12 +455,15 @@ byId("save").onclick=()=>{
  if(!validPolygon(draft)){alert("Полигон није исправан. Потребна су бар три темена без самопресецања.");return;}
  const f=active();counter++;
  const kml=byId("kml").value.trim();
- const generatedId=kml?"KML:"+kml:makeId(surfaceType==="roof"?"AZ-R":"AZ-U");
+ const reuse=byId("reuseAssetId").value.trim();
+ if(reuse&&!records.some(r=>r.asset_id===reuse)){alert("Изабрани инвентарски ID није пронађен у постојећим записима.");return;}
+ const generatedId=reuse||(kml?"KML:"+kml:makeId(surfaceType==="roof"?"AZ-R":"AZ-U"));
  records.push({id:makeId("ANN"),asset_id:generatedId,component_id:makeId("PART"),
   surface_type:surfaceType,source_video:dataset.source_filename,frame_filename:f.filename,
   requested_seek_seconds:f.requested_seek_seconds,points:draft.map(q=>q.slice()),
   image_width_px:img.naturalWidth,image_height_px:img.naturalHeight,
   import_source_filename:byId("importSource").value||"",
+  kml_source_filename:byId("kmlSource").value.trim()||(kml?"Azbest.kml":""),
   product_type:byId("materialType").value,
   evidence_source:byId("evidenceSource").value,
   evidence_refs:pendingEvidence.slice(),
