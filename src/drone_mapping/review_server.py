@@ -27,7 +27,21 @@ def validate_payload(payload: object, source_video: str, frame_names: set[str]) 
         raise ValueError("Expected annotations array (max 20,000)")
     if not isinstance(payload.get("revision", 0), int) or payload.get("revision", 0) < 0:
         raise ValueError("Revision must be a non-negative integer")
+    valid_evidence = {"SUSPICION", "EXPERT_ASSESSMENT", "LAB_CONFIRMED"}
     for item in items:
+        level = item.get("evidence_level", "SUSPICION")
+        if level not in valid_evidence:
+            raise ValueError("Unknown evidence level")
+        if level != "SUSPICION" and not str(item.get("evidence_reference") or "").strip():
+            raise ValueError("Expert/laboratory claims need an evidence reference")
+        if item.get("construction_year") not in (None, ""):
+            value = str(item["construction_year"])
+            if not (value.isdigit() and len(value) == 4 and 1800 <= int(value) <= 2100):
+                raise ValueError("Invalid construction year")
+        if item.get("renovation_year") not in (None, ""):
+            value = str(item["renovation_year"])
+            if not (value.isdigit() and len(value) == 4 and 1800 <= int(value) <= 2100):
+                raise ValueError("Invalid renovation year")
         if not isinstance(item, dict) or item.get("frame_filename") not in frame_names:
             raise ValueError("Unknown frame or invalid annotation")
         pts = item.get("points")
