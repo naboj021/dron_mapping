@@ -218,7 +218,7 @@ function showAttachments(){
   const line=document.createElement("div");
   const title=item.title||item.original_filename||item.url||item.evidence_id;
   line.appendChild(document.createTextNode(title+" · "+(item.source_type||"непознат извор")+" · "));
-  if(item.kind==="url"){
+  if(item.kind==="url"&&/^https?:\/\//i.test(item.url||"")){
    const anchor=document.createElement("a");anchor.href=item.url;anchor.target="_blank";
    anchor.rel="noopener noreferrer";anchor.textContent="Отвори URL";line.appendChild(anchor);
   }else{
@@ -240,7 +240,7 @@ byId("addEvidenceUrl").onclick=()=>{
  let address;
  try{address=new URL(raw);if(!["https:","http:"].includes(address.protocol)||!address.hostname)throw Error("URL мора бити http(s)");}
  catch(e){alert("Унеси исправан http:// или https:// URL.");return}
- if(raw.length>2048){alert("URL је предугачак.");return}
+ if(raw.length>2048||address.username||address.password){alert("URL је предугачак или садржи корисничке податке.");return}
  const ref={
   evidence_id:makeId("URL"),kind:"url",url:address.href,
   title:byId("evidenceTitle").value.trim()||address.hostname,
