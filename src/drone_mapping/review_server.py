@@ -6,6 +6,8 @@ The service binds to loopback; no public networking or cloud upload.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import uuid
 import json
 import os
 import secrets
@@ -17,6 +19,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 MAX_BYTES = 8_000_000
+MAX_EVIDENCE_BYTES = 20_000_000
+ALLOWED_EVIDENCE_TYPES = {'.pdf', '.jpg', '.jpeg', '.png', '.docx', '.xlsx', '.txt'}
 
 
 def validate_payload(payload: object, source_video: str, frame_names: set[str]) -> dict:
@@ -103,6 +107,7 @@ def serve(folder: Path, host: str = "127.0.0.1", port: int = 8765, seed: Path | 
         raise ValueError("Unsafe frame filename in manifest")
     token = secrets.token_urlsafe(32)
     save_file = folder / "annotations.local.json"
+    evidence_dir = folder / "evidence"
     save_lock = threading.Lock()
     if seed is not None:
         if save_file.exists():
@@ -152,8 +157,46 @@ def serve(folder: Path, host: str = "127.0.0.1", port: int = 8765, seed: Path | 
             return self._send(b"Not found", 404, "text/plain")
 
         def do_POST(self) -> None:
-            if urlsplit(self.path).path != "/api/annotations" or not self._allowed():
+            if not self._allowed():
                 return self._send(b"Forbidden", 403, "text/plain")
+            if urlsplit(self.path).path == "/api/evidence":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if not 0 < length <= MAX_EVIDENCE_BYTES:
+                        raise ValueError("Evidence must be 1 byte to 20 MB")
+                    original = unquote(self.headers.get("X-Evidence-Filename", ""))
+                    if (not original or len(original) > 255 or
+                        original != Path(original).name or "\\" in original):
+                        raise ValueError("Invalid evidence filename")
+                    suffix = Path(original).suffix.lower()
+                    if suffix not in ALLOWED_EVIDENCE_TYPES:
+                        raise ValueError("File extension not allowed")
+                    content = self.rfile.read(length)
+                    if len(content) != length:
+                        raise ValueError("Incomplete upload")
+                    if suffix == ".pdf" and not content.startswith(b"%PDF-"):
+                        raise ValueError("Not PDF")
+                    if suffix in (".jpg", ".jpeg") and not content.startswith(bytes.fromhex("ffd8")):
+                        raise ValueError("Not JPEG")
+                    if suffix == ".png" and not content.startswith(bytes.fromhex("89504e470d0a1a0a")):
+                        raise ValueError("Not PNG")
+                    if suffix in (".docx", ".xlsx") and not content.startswith(b"PK"):
+                        raise ValueError("Not Office archive")
+                    evidence_dir.mkdir(exist_ok=True)
+                    evidence_id = "EV-" + uuid.uuid4().hex
+                    storage_name = evidence_id + suffix
+                    with open(evidence_dir / storage_name, "xb") as out:
+                        out.write(content)
+                        out.flush()
+                        os.fsync(out.fileno())
+                    result = {"evidence_id": evidence_id, "original_filename": original,
+                              "storage_name": storage_name, "size_bytes": length,
+                              "sha256": hashlib.sha256(content).hexdigest()}
+                    return self._send(json.dumps(result).encode(), 201, "application/json")
+                except (ValueError, OSError) as exc:
+                    return self._send(str(exc).encode()[:600], 400, "text/plain")
+            if urlsplit(self.path).path != "/api/annotations":
+                return self._send(b"Not found", 404, "text/plain")
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= MAX_BYTES:
