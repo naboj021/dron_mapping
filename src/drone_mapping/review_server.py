@@ -59,8 +59,29 @@ def validate_payload(payload: object, source_video: str, frame_names: set[str]) 
             if not isinstance(refs, list) or len(refs) > 100:
                 raise ValueError("Invalid evidence attachments list")
             for evidence in refs:
-                if not isinstance(evidence, dict) or not str(evidence.get("evidence_id") or "").startswith("EV-"):
+                if not isinstance(evidence, dict):
                     raise ValueError("Malformed evidence record")
+                identifier = evidence.get("evidence_id")
+                kind = evidence.get("kind", "file")
+                if kind == "url":
+                    if not isinstance(identifier, str) or not identifier.startswith("URL-"):
+                        raise ValueError("Invalid URL evidence ID")
+                    url = evidence.get("url")
+                    if not isinstance(url, str) or len(url) > 2048:
+                        raise ValueError("Invalid evidence URL")
+                    parsed = urlsplit(url)
+                    if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+                        raise ValueError("Evidence links must use http(s) without URL credentials")
+                elif kind == "file":
+                    if not isinstance(identifier, str) or not identifier.startswith("EV-"):
+                        raise ValueError("Invalid local evidence file ID")
+                    if not isinstance(evidence.get("sha256", ""), str):
+                        raise ValueError("Invalid evidence file checksum")
+                else:
+                    raise ValueError("Unknown evidence kind")
+                for field in ("title", "source_type", "source_reference", "added_at", "retrieval_status"):
+                    if field in evidence and (not isinstance(evidence[field], str) or len(evidence[field]) > 2000):
+                        raise ValueError("Invalid evidence metadata")
         pts = item.get("points")
         box = item.get("box")
         if pts is not None:
@@ -79,7 +100,7 @@ def validate_payload(payload: object, source_video: str, frame_names: set[str]) 
                 raise ValueError("Invalid legacy box")
         else:
             raise ValueError("Missing annotation polygon")
-        for key in ("description", "note", "orientation", "visual_category", "reviewer", "evidence_level", "evidence_reference", "evidence_issuer", "lab_accreditation", "product_type", "evidence_source", "asset_id", "component_id", "import_source_filename", "cadastral_parcel", "estimated_area_m2", "observation_date", "building_use", "ownership_type", "construction_year", "renovation_year", "material_location", "material_condition", "disturbance_risk", "surface_type"):
+        for key in ("description", "note", "orientation", "visual_category", "reviewer", "evidence_level", "evidence_reference", "evidence_issuer", "lab_accreditation", "product_type", "evidence_source", "asset_id", "component_id", "import_source_filename", "cadastral_parcel", "cadastral_municipality", "private_street", "private_house_number", "private_locality", "estimated_area_m2", "observation_date", "building_use", "ownership_type", "construction_year", "renovation_year", "material_location", "material_condition", "disturbance_risk", "surface_type"):
             if key in item and (not isinstance(item[key], str) or len(item[key]) > 5000):
                 raise ValueError("Invalid annotation field: " + key)
         if item.get("kml_reference") is not None and (
