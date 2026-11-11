@@ -21,6 +21,10 @@ header small{display:block;opacity:.84}main{display:grid;grid-template-columns:m
 section{background:white;padding:12px;border-radius:10px;box-shadow:0 1px 5px #0001}
 button,select,input,textarea{font:inherit}button{cursor:pointer;padding:7px 10px;margin:3px;border:1px solid #a9b8c6;border-radius:6px;background:#fff}
 button.primary{background:#176e57;color:white;border-color:#176e57}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}.tabs button{flex:1;background:#e9edf2}
+.tabs button.active{background:#173047;color:#fff}.tabs button{min-width:135px}
+#assetId{background:#e9f2f2;font-weight:600}details{margin:12px 0}
+#evidenceList{overflow-wrap:anywhere;line-height:1.5}
 #viewer{width:100%;height:62vh;min-height:300px;max-height:750px;text-align:center;overflow:auto;background:#24313b;border-radius:6px}
 #framebox{position:relative;display:inline-block;vertical-align:top;user-select:none;line-height:0}
 #photo{display:block;max-width:none;max-height:none;pointer-events:none}
@@ -50,46 +54,67 @@ textarea{height:70px;resize:vertical}
 <strong>Ознаке на овом кадру</strong><ol id="records"></ol>
 </section>
 <section>
-<strong>Nova oznaka</strong>
-<label>Положај дела објекта / крова</label><select id="orientation">
-<option value="">Није одређено</option>
-<option value="N">Север</option><option value="NE">Североисток</option>
-<option value="E">Исток</option><option value="SE">Југоисток</option>
-<option value="S">Југ</option><option value="SW">Југозапад</option>
-<option value="W">Запад</option><option value="NW">Северозапад</option>
-<option value="CENTRAL">Средишњи део</option>
-</select>
-<label>Opis oblasti</label><input id="label" placeholder="npr. dva krova gore levo / deo vrtića">
-<label>Vizuelna kategorija</label><select id="category">
-<option value="suspected_asbestos">Sumnja na azbest</option>
-<option value="other_roof">Drugi tip krova</option>
-<option value="replaced_roof_section">Zamenjeni deo krova — istorijska promena</option>
-<option value="unknown">Neodređeno</option></select>
+<div class="tabs" role="tablist" aria-label="Vrsta azbestnog inventara">
+<button id="tabRoof" type="button" class="active" role="tab" aria-selected="true">Кровови</button>
+<button id="tabBuilt" type="button" role="tab" aria-selected="false">Уграђени азбест: зидови / подови / друго</button>
+</div>
+<label>Инвентарски ID објекта</label><input id="assetId" readonly placeholder="Аутоматски након чувања">
+<label>KML ID (само ако постоји у изворном KML-у)</label><input id="kml" placeholder="Ако није у KML-у, остави празно">
+<label>Положај дела објекта / оријентација</label><select id="orientation">
+<option value="">Непознато</option><option value="N">Север</option><option value="NE">Североисток</option>
+<option value="E">Исток</option><option value="SE">Југоисток</option><option value="S">Југ</option>
+<option value="SW">Југозапад</option><option value="W">Запад</option><option value="NW">Северозапад</option>
+<option value="CENTRAL">Средишњи део</option></select>
+<label id="materialTypeLabel">Тип кровног покривача</label><select id="materialType">
+<option value="">Непознато</option><option value="corrugated_sheet">Таласасте плоче</option>
+<option value="flat_sheet">Равне плоче</option><option value="tiles">Цреп / плочице</option>
+<option value="metal">Метал</option><option value="other">Други</option></select>
+<label>Визуелна категорија</label><select id="category"></select>
 <label>Ниво доказа</label><select id="evidenceLevel">
 <option value="SUSPICION">Сумња</option>
 <option value="EXPERT_ASSESSMENT">Стручна процена</option>
 <option value="LAB_CONFIRMED">Лабораторијска потврда</option></select>
-<label>Референца доказа (за виши ниво обавезно)</label><input id="evidenceReference" placeholder="Број извештаја, стручњак или документ">
+<label>Извор податка / доказа</label><select id="evidenceSource">
+<option value="drone">Дрон / визуелни преглед</option>
+<option value="cadastre">Катастар</option><option value="inspector">Инспекција</option>
+<option value="laboratory">Лабораторија</option><option value="expert">Стручно лице</option>
+<option value="project">Пројектна документација</option>
+<option value="citizen">Грађанин / сведочење</option>
+<option value="other">Друго</option></select>
+<label>Број документа / линк / референца доказа</label><input id="evidenceReference" placeholder="Обавезно за стручну процену и лабораторијску потврду">
+<label>Додај датотеку доказа (локално, до 20 MB)</label><input id="evidenceFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,.txt">
+<button id="uploadEvidence" type="button">Приложи датотеку</button>
+<div id="evidenceList" class="note">Нема прилога</div>
+<label>Стање материјала</label><select id="materialCondition">
+<option value="">Непознато</option>
+<option value="apparently_intact">Наизглед очуван</option>
+<option value="visibly_damaged">Видљиво оштећен</option>
+<option value="disturbed">Радови / нарушавање</option>
+<option value="replaced">Замењен</option></select>
+<label>Могуће нарушавање / контакт</label><select id="disturbanceRisk">
+<option value="">Није процењено</option>
+<option value="none_visible">Нема видљивог нарушавања</option>
+<option value="works_visible">Видљиви радови</option>
+<option value="public_access">Потенцијалан контакт са људима</option></select>
+<label>Опис дела објекта</label><input id="label" placeholder="нпр. западно крило вртића">
+<label>Напомена / детаљи</label><textarea id="note" placeholder="Шта се види, која је историја радова?"></textarea>
 <label>Ко је прегледао снимак?</label><input id="reviewer" placeholder="Име или шифра прегледача">
 <label>Намена објекта</label><select id="buildingUse">
 <option value="">Непознато</option><option value="preschool">Вртић</option>
 <option value="residential">Стамбено</option><option value="school">Школа</option>
-<option value="industrial">Индустријско</option><option value="commercial">Пословно</option>
-<option value="other">Друго</option></select>
+<option value="industrial">Индустријско</option>
+<option value="commercial">Пословно</option><option value="other">Друго</option></select>
 <label>Власништво</label><select id="ownershipType">
 <option value="">Непознато</option><option value="public">Јавно</option>
 <option value="private">Приватно</option><option value="mixed">Мешовито</option></select>
-<label>Година изградње (ако је позната)</label><input id="constructionYear" inputmode="numeric" placeholder="нпр. 1975">
-<label>Последња позната обнова крова/фасаде — година</label><input id="renovationYear" inputmode="numeric" placeholder="ако је документована">
-<label>Стање материјала</label><select id="materialCondition">
-<option value="">Непознато</option><option value="apparently_intact">Наизглед очуван</option>
-<option value="visibly_damaged">Видљиво оштећен</option><option value="disturbed">Радови/узнемиравање материјала</option>
-<option value="replaced">Замењен</option></select>
-<label>Могуће нарушавање/контакт</label><select id="disturbanceRisk">
-<option value="">Није процењено</option><option value="none_visible">Нема видљивих радова</option>
-<option value="works_visible">Уочени радови</option><option value="public_access">Приступачно људима</option></select>
-<label>Opis / napomena</label><textarea id="note" placeholder="Šta se vidi; šta treba proveriti?"></textarea>
-<label>KML ID објекта (опционо, може се понављати за више кровова)</label><input id="kml" placeholder="Остави празно ако област није била у KML-у">
+<label>Година изградње</label><input id="constructionYear" inputmode="numeric" placeholder="Само ако је позната">
+<label>Последња позната обнова (година)</label><input id="renovationYear" inputmode="numeric" placeholder="Само ако је позната">
+<details><summary>Додатни подаци инвентара</summary>
+<label>Катастарска парцела / КО</label><input id="cadastralParcel">
+<label>Процењена површина материјала (m²)</label><input id="estimatedArea" inputmode="decimal" placeholder="Празно ако није измерено">
+<label>Датум посматрања / извора</label><input id="observationDate" type="date">
+<label>Изворни документ / датотека из које је увезено</label><input id="importSource" readonly>
+</details>
 <div><button class="primary" id="save" disabled>Сачувај област</button><button id="cancel">Откажи цртање</button></div>
 <hr>
 <div id="saveStatus" role="status" style="font-weight:600;margin:8px 0">Провера локалног чувања…</div><button class="primary" id="export">Извези annotations JSON (резервна копија)</button>
