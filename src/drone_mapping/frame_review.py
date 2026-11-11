@@ -21,6 +21,10 @@ header small{display:block;opacity:.84}main{display:grid;grid-template-columns:m
 section{background:white;padding:12px;border-radius:10px;box-shadow:0 1px 5px #0001}
 button,select,input,textarea{font:inherit}button{cursor:pointer;padding:7px 10px;margin:3px;border:1px solid #a9b8c6;border-radius:6px;background:#fff}
 button.primary{background:#176e57;color:white;border-color:#176e57}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}.tabs button{flex:1;background:#e9edf2}
+.tabs button.active{background:#173047;color:#fff}.tabs button{min-width:135px}
+#assetId{background:#e9f2f2;font-weight:600}details{margin:12px 0}
+#evidenceList{overflow-wrap:anywhere;line-height:1.5}
 #viewer{width:100%;height:62vh;min-height:300px;max-height:750px;text-align:center;overflow:auto;background:#24313b;border-radius:6px}
 #framebox{position:relative;display:inline-block;vertical-align:top;user-select:none;line-height:0}
 #photo{display:block;max-width:none;max-height:none;pointer-events:none}
@@ -50,46 +54,69 @@ textarea{height:70px;resize:vertical}
 <strong>Ознаке на овом кадру</strong><ol id="records"></ol>
 </section>
 <section>
-<strong>Nova oznaka</strong>
-<label>Положај дела објекта / крова</label><select id="orientation">
-<option value="">Није одређено</option>
-<option value="N">Север</option><option value="NE">Североисток</option>
-<option value="E">Исток</option><option value="SE">Југоисток</option>
-<option value="S">Југ</option><option value="SW">Југозапад</option>
-<option value="W">Запад</option><option value="NW">Северозапад</option>
-<option value="CENTRAL">Средишњи део</option>
-</select>
-<label>Opis oblasti</label><input id="label" placeholder="npr. dva krova gore levo / deo vrtića">
-<label>Vizuelna kategorija</label><select id="category">
-<option value="suspected_asbestos">Sumnja na azbest</option>
-<option value="other_roof">Drugi tip krova</option>
-<option value="replaced_roof_section">Zamenjeni deo krova — istorijska promena</option>
-<option value="unknown">Neodređeno</option></select>
+<div class="tabs" role="tablist" aria-label="Vrsta azbestnog inventara">
+<button id="tabRoof" type="button" class="active" role="tab" aria-selected="true">Кровови</button>
+<button id="tabBuilt" type="button" role="tab" aria-selected="false">Уграђени азбест: зидови / подови / друго</button>
+</div>
+<label>Инвентарски ID објекта</label><input id="assetId" readonly placeholder="Аутоматски након чувања">
+<label>KML ID (само ако постоји у изворном KML-у)</label><input id="kml" placeholder="Ако није у KML-у, остави празно">
+<label>Положај дела објекта / оријентација</label><select id="orientation">
+<option value="">Непознато</option><option value="N">Север</option><option value="NE">Североисток</option>
+<option value="E">Исток</option><option value="SE">Југоисток</option><option value="S">Југ</option>
+<option value="SW">Југозапад</option><option value="W">Запад</option><option value="NW">Северозапад</option>
+<option value="CENTRAL">Средишњи део</option></select>
+<label id="materialTypeLabel">Тип кровног покривача</label><select id="materialType">
+<option value="">Непознато</option><option value="corrugated_sheet">Таласасте плоче</option>
+<option value="flat_sheet">Равне плоче</option><option value="tiles">Цреп / плочице</option>
+<option value="metal">Метал</option><option value="other">Други</option></select>
+<label>Визуелна категорија</label><select id="category"></select>
 <label>Ниво доказа</label><select id="evidenceLevel">
 <option value="SUSPICION">Сумња</option>
 <option value="EXPERT_ASSESSMENT">Стручна процена</option>
 <option value="LAB_CONFIRMED">Лабораторијска потврда</option></select>
-<label>Референца доказа (за виши ниво обавезно)</label><input id="evidenceReference" placeholder="Број извештаја, стручњак или документ">
+<label>Извор податка / доказа</label><select id="evidenceSource">
+<option value="drone">Дрон / визуелни преглед</option>
+<option value="cadastre">Катастар</option><option value="inspector">Инспекција</option>
+<option value="laboratory">Лабораторија</option><option value="expert">Стручно лице</option>
+<option value="project">Пројектна документација</option>
+<option value="citizen">Грађанин / сведочење</option>
+<option value="other">Друго</option></select>
+<label>Број документа / линк / референца доказа</label><input id="evidenceReference" placeholder="Обавезно за стручну процену и лабораторијску потврду">
+<label>Издавалац документа / лабораторија / стручњак</label><input id="evidenceIssuer" placeholder="Назив установе или име стручног лица">
+<label>Акредитација лабораторије (за лабораторијску потврду)</label><input id="labAccreditation" placeholder="Број акредитације или референца акредитационог тела">
+<label>Додај датотеку доказа (локално, до 20 MB)</label><input id="evidenceFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,.txt">
+<button id="uploadEvidence" type="button">Приложи датотеку</button>
+<div id="evidenceList" class="note">Нема прилога</div>
+<label>Стање материјала</label><select id="materialCondition">
+<option value="">Непознато</option>
+<option value="apparently_intact">Наизглед очуван</option>
+<option value="visibly_damaged">Видљиво оштећен</option>
+<option value="disturbed">Радови / нарушавање</option>
+<option value="replaced">Замењен</option></select>
+<label>Могуће нарушавање / контакт</label><select id="disturbanceRisk">
+<option value="">Није процењено</option>
+<option value="none_visible">Нема видљивог нарушавања</option>
+<option value="works_visible">Видљиви радови</option>
+<option value="public_access">Потенцијалан контакт са људима</option></select>
+<label>Опис дела објекта</label><input id="label" placeholder="нпр. западно крило вртића">
+<label>Напомена / детаљи</label><textarea id="note" placeholder="Шта се види, која је историја радова?"></textarea>
 <label>Ко је прегледао снимак?</label><input id="reviewer" placeholder="Име или шифра прегледача">
 <label>Намена објекта</label><select id="buildingUse">
 <option value="">Непознато</option><option value="preschool">Вртић</option>
 <option value="residential">Стамбено</option><option value="school">Школа</option>
-<option value="industrial">Индустријско</option><option value="commercial">Пословно</option>
-<option value="other">Друго</option></select>
+<option value="industrial">Индустријско</option>
+<option value="commercial">Пословно</option><option value="other">Друго</option></select>
 <label>Власништво</label><select id="ownershipType">
 <option value="">Непознато</option><option value="public">Јавно</option>
 <option value="private">Приватно</option><option value="mixed">Мешовито</option></select>
-<label>Година изградње (ако је позната)</label><input id="constructionYear" inputmode="numeric" placeholder="нпр. 1975">
-<label>Последња позната обнова крова/фасаде — година</label><input id="renovationYear" inputmode="numeric" placeholder="ако је документована">
-<label>Стање материјала</label><select id="materialCondition">
-<option value="">Непознато</option><option value="apparently_intact">Наизглед очуван</option>
-<option value="visibly_damaged">Видљиво оштећен</option><option value="disturbed">Радови/узнемиравање материјала</option>
-<option value="replaced">Замењен</option></select>
-<label>Могуће нарушавање/контакт</label><select id="disturbanceRisk">
-<option value="">Није процењено</option><option value="none_visible">Нема видљивих радова</option>
-<option value="works_visible">Уочени радови</option><option value="public_access">Приступачно људима</option></select>
-<label>Opis / napomena</label><textarea id="note" placeholder="Šta se vidi; šta treba proveriti?"></textarea>
-<label>KML ID објекта (опционо, може се понављати за више кровова)</label><input id="kml" placeholder="Остави празно ако област није била у KML-у">
+<label>Година изградње</label><input id="constructionYear" inputmode="numeric" placeholder="Само ако је позната">
+<label>Последња позната обнова (година)</label><input id="renovationYear" inputmode="numeric" placeholder="Само ако је позната">
+<details><summary>Додатни подаци инвентара</summary>
+<label>Катастарска парцела / КО</label><input id="cadastralParcel">
+<label>Процењена површина материјала (m²)</label><input id="estimatedArea" inputmode="decimal" placeholder="Празно ако није измерено">
+<label>Датум посматрања / извора</label><input id="observationDate" type="date">
+<label>Изворни документ / датотека из које је увезено</label><input id="importSource" readonly>
+</details>
 <div><button class="primary" id="save" disabled>Сачувај област</button><button id="cancel">Откажи цртање</button></div>
 <hr>
 <div id="saveStatus" role="status" style="font-weight:600;margin:8px 0">Провера локалног чувања…</div><button class="primary" id="export">Извези annotations JSON (резервна копија)</button>
@@ -99,7 +126,7 @@ textarea{height:70px;resize:vertical}
 <script>
 "use strict";
 const dataset=__DATA__;
-let index=0, records=[], draft=[], selectedId=null, drag=null, counter=0, dirty=false, zoom=1;
+let index=0, records=[], draft=[], selectedId=null, drag=null, counter=0, dirty=false, zoom=1, surfaceType="roof", pendingEvidence=[];
 const localMode=location.protocol==="http:"&&location.hostname==="127.0.0.1";
 const reviewToken="__LOCAL_REVIEW_TOKEN__";
 let saveQueue=Promise.resolve(), editVersion=0, savedVersion=0, loaded=false, serverRevision=0;
@@ -131,6 +158,84 @@ byId("zoomin").onclick=()=>{zoom=Math.min(5,zoom+.25);updateZoom()};
 byId("zoomout").onclick=()=>{zoom=Math.max(1,zoom-.25);updateZoom()};
 byId("fit").onclick=()=>{zoom=1;updateZoom(false)};
 
+
+const ROOF_OPTIONS=[["suspected_asbestos","Сумња на азбест"],["other_roof","Други тип крова"],["replaced_roof_section","Замењени део крова"],["unknown","Неодређено"]];
+const BUILT_OPTIONS=[["suspected_asbestos","Сумња на азбест"],["other_built","Други материјал"],["replaced_built","Замењен део"],["unknown","Неодређено"]];
+const ROOF_MATERIALS=[["","Непознато"],["corrugated_sheet","Таласасте плоче"],["flat_sheet","Равне плоче"],["tiles","Цреп"],["metal","Метал"],["other","Друго"]];
+const BUILT_MATERIALS=[["","Непознато"],["wall_panel","Зидна / фасадна плоча"],["floor_tile","Подна облога"],["ceiling_panel","Плафонска плоча"],["insulation","Изолација"],["pipe","Цев / спојница"],["other","Други уграђени материјал"]];
+function setOptions(id,items,value){
+ const el=byId(id);el.replaceChildren();
+ for(const [key,title] of items){const opt=document.createElement("option");opt.value=key;opt.textContent=title;el.appendChild(opt)}
+ el.value=value||items[0][0];
+}
+function setTab(type,{reset=true}={}){
+ surfaceType=type;
+ byId("tabRoof").classList.toggle("active",type==="roof");
+ byId("tabBuilt").classList.toggle("active",type==="built_in");
+ byId("tabRoof").setAttribute("aria-selected",type==="roof");
+ byId("tabBuilt").setAttribute("aria-selected",type==="built_in");
+ byId("materialTypeLabel").textContent=type==="roof"?"Тип кровног покривача":"Место уградње / врста елемента";
+ setOptions("category",type==="roof"?ROOF_OPTIONS:BUILT_OPTIONS,"suspected_asbestos");
+ setOptions("materialType",type==="roof"?ROOF_MATERIALS:BUILT_MATERIALS,"");
+ if(reset){draft=[];selectedId=null;pendingEvidence=[];clearForm();}
+ render();
+}
+byId("tabRoof").onclick=()=>setTab("roof");
+byId("tabBuilt").onclick=()=>setTab("built_in");
+function makeId(prefix){
+ if(window.crypto&&crypto.randomUUID)return prefix+"-"+crypto.randomUUID();
+ return prefix+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,12);
+}
+function ensureIds(record,sourceFile=""){
+ let changed=false;
+ if(!record.surface_type){record.surface_type="roof";changed=true;}
+ if(!record.asset_id){
+  record.asset_id=record.kml_reference?"KML:"+record.kml_reference:makeId(record.surface_type==="roof"?"AZ-R":"AZ-U");changed=true;
+ }
+ if(!record.component_id){record.component_id=makeId("PART");changed=true;}
+ if(!record.import_source_filename&&sourceFile){record.import_source_filename=sourceFile;changed=true;}
+ if(!record.evidence_level){record.evidence_level="SUSPICION";changed=true;}
+ if(!record.evidence_refs){record.evidence_refs=[];changed=true;}
+ return changed;
+}
+function showAttachments(){
+ const root=byId("evidenceList");root.replaceChildren();
+ const record=records.find(r=>r.id===selectedId);
+ const items=record?(record.evidence_refs||[]):pendingEvidence;
+ if(!items.length){root.textContent="Нема приложених датотека";return}
+ for(const item of items){
+  const line=document.createElement("div");
+  line.textContent=(item.original_filename||item.evidence_id)+" · "+(item.source_type||"извор није наведен")+" · SHA-256 "+String(item.sha256||"").slice(0,12)+"…";
+  root.appendChild(line);
+ }
+}
+byId("uploadEvidence").onclick=async()=>{
+ if(!localMode){alert("Покрени локални сервер за додавање датотека.");return;}
+ if(!loaded){alert("База још није учитана.");return;}
+ const file=byId("evidenceFile").files[0];if(!file){alert("Изабери датотеку.");return;}
+ if(file.size>20_000_000||file.size===0){alert("Датотека мора бити између 1B и 20MB.");return;}
+ const btn=byId("uploadEvidence");btn.disabled=true;
+ try{
+  const response=await fetch("/api/evidence",{method:"POST",headers:{
+   "X-Review-Token":reviewToken,"X-Evidence-Filename":encodeURIComponent(file.name),
+   "Content-Type":"application/octet-stream"
+  },body:await file.arrayBuffer()});
+  if(!response.ok)throw Error(await response.text());
+  const info=await response.json();
+  info.source_type=byId("evidenceSource").value;
+  info.source_reference=byId("evidenceReference").value.trim();
+  const record=records.find(r=>r.id===selectedId);
+  if(record){record.evidence_refs=record.evidence_refs||[];record.evidence_refs.push(info);scheduleSave();}
+  else pendingEvidence.push(info);
+  byId("evidenceFile").value="";showAttachments();
+  status(record?"Прилог додат; чување измена…":"Прилог привремено додат. Сачувај област да га повежеш.");
+ }catch(err){alert("Неуспешно додавање прилога: "+err.message)}
+ finally{btn.disabled=false}
+};
+byId("kml").addEventListener("input",()=>{
+ if(!selectedId)byId("assetId").value=byId("kml").value.trim()?"KML:"+byId("kml").value.trim():"Аутоматски при чувању";
+});
+
 const clamp=v=>Math.max(0,Math.min(1,v));
 const active=()=>dataset.frames[index];
 function status(message){byId("saveStatus").textContent=message}
@@ -160,8 +265,10 @@ async function loadSaved(){
   if(!response.ok)throw Error(await response.text());
   const data=await response.json();
   if(data.source_video!==dataset.source_filename||!Array.isArray(data.annotations))throw Error("Неодговарајућа датотека");
-  records=data.annotations;serverRevision=data.revision||0;counter=records.length;savedVersion=editVersion;dirty=false;loaded=true;
-  status("Локално чување укључено ✓ ("+records.length+" ознака учитано)");
+  records=data.annotations;serverRevision=data.revision||0;counter=records.length;
+  let migrated=false;for(const record of records){if(ensureIds(record))migrated=true;}
+  if(migrated&&localMode){scheduleSave();}savedVersion=editVersion;dirty=false;loaded=true;
+  if(!migrated)status("Локално чување укључено ✓ ("+records.length+" ознака учитано)");
  }catch(err){status("Не могу да учитам локалне ознаке: "+err.message+". Не почињи анотацију.");}
  finally{render()}
 }
@@ -194,10 +301,18 @@ function draw(points,kind,owner){
  }
 }
 function clearForm(){
+ byId("assetId").value="Аутоматски при чувању";
  byId("label").value="";byId("note").value="";byId("kml").value="";
- byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;byId("evidenceLevel").value="SUSPICION";byId("evidenceReference").value="";byId("reviewer").value="";byId("buildingUse").value="";byId("ownershipType").value="";byId("constructionYear").value="";byId("renovationYear").value="";byId("materialCondition").value="";byId("disturbanceRisk").value="";
+ byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;byId("evidenceLevel").value="SUSPICION";byId("evidenceReference").value="";byId("evidenceIssuer").value="";byId("labAccreditation").value="";byId("reviewer").value="";byId("buildingUse").value="";byId("ownershipType").value="";byId("constructionYear").value="";byId("renovationYear").value="";byId("materialCondition").value="";byId("disturbanceRisk").value="";byId("materialType").selectedIndex=0;byId("evidenceSource").value="drone";byId("cadastralParcel").value="";byId("estimatedArea").value="";byId("observationDate").value="";byId("importSource").value="";showAttachments();
 }
 function loadForm(r){
+ byId("assetId").value=r.asset_id||"";
+ byId("materialType").value=r.product_type||"";
+ byId("evidenceSource").value=r.evidence_source||"drone";
+ byId("cadastralParcel").value=r.cadastral_parcel||"";
+ byId("estimatedArea").value=r.estimated_area_m2||"";
+ byId("observationDate").value=r.observation_date||"";
+ byId("importSource").value=r.import_source_filename||"";
  byId("label").value=r.description||"";
  byId("note").value=r.note||"";
  byId("kml").value=r.kml_reference||"";
@@ -205,6 +320,8 @@ function loadForm(r){
  byId("category").value=["suspected_fibrecement","kindergarten_area"].includes(r.visual_category)?"suspected_asbestos":(r.visual_category||"suspected_asbestos");
  byId("evidenceLevel").value=r.evidence_level||"SUSPICION";
  byId("evidenceReference").value=r.evidence_reference||"";
+ byId("evidenceIssuer").value=r.evidence_issuer||"";
+ byId("labAccreditation").value=r.lab_accreditation||"";
  byId("reviewer").value=r.reviewer||"";
  byId("buildingUse").value=r.building_use||"";
  byId("ownershipType").value=r.ownership_type||"";
@@ -218,14 +335,14 @@ function render(){
  if(img.getAttribute("src")!==url)img.src=url;
  byId("position").textContent=(index+1)+"/"+dataset.frames.length+" — "+f.filename+" — "+f.requested_seek_seconds+" s";
  overlay.replaceChildren();
- const current=records.filter(r=>r.frame_filename===f.filename);
+ const current=records.filter(r=>r.frame_filename===f.filename&&(r.surface_type||"roof")===surfaceType);
  for(const r of current)draw(polygonPoints(r),r.id===selectedId?"selected":"saved",r.id);
  if(draft.length)draw(draft,"draft","draft");
  const list=byId("records");list.replaceChildren();
  for(const r of current){
   const li=document.createElement("li");
   const choose=document.createElement("button");choose.textContent=(r.id===selectedId?"✓ ":"Измени: ")+(r.orientation?"["+r.orientation+"] ":"")+(r.description||r.visual_category)+(r.kml_reference?" · KML "+r.kml_reference:" · није у KML-у");
-  choose.onclick=()=>{selectedId=selectedId===r.id?null:r.id;draft=[];if(selectedId)loadForm(r);else clearForm();render()};
+  choose.onclick=()=>{selectedId=selectedId===r.id?null:r.id;draft=[];pendingEvidence=[];if(selectedId)loadForm(r);else clearForm();showAttachments();render()};
   const del=document.createElement("button");del.textContent="Обриши";
   del.onclick=()=>{if(confirm("Обрисати ову ознаку?")){records=records.filter(x=>x.id!==r.id);scheduleSave();if(selectedId===r.id)selectedId=null;render()}};
   li.append(choose,del);list.appendChild(li);
@@ -266,7 +383,7 @@ overlay.addEventListener("pointerdown",e=>{
   if(vertex>=target.length)return;
   drag={owner,vertex};overlay.setPointerCapture(e.pointerId);e.preventDefault();return;
  }
- if(selectedId){selectedId=null;clearForm()}
+ if(selectedId){selectedId=null;pendingEvidence=[];clearForm()}
  draft.push(coords(e));render();
 });
 overlay.addEventListener("pointermove",e=>{
@@ -291,20 +408,30 @@ overlay.addEventListener("pointerup",endDrag);
 overlay.addEventListener("pointercancel",endDrag);
 byId("prev").onclick=()=>go(-1);
 byId("next").onclick=()=>go(1);
-byId("cancel").onclick=()=>{draft=[];selectedId=null;clearForm();render()};
+byId("cancel").onclick=()=>{draft=[];selectedId=null;pendingEvidence=[];clearForm();render()};
 byId("save").onclick=()=>{
  if(!loaded){alert("Сачекај потврду учитавања локалних података.");return}
  if(selectedId){
-  if(byId("evidenceLevel").value!=="SUSPICION"&&!byId("evidenceReference").value.trim()){
+  if(byId("evidenceLevel").value==="LAB_CONFIRMED"&&!byId("labAccreditation").value.trim()){alert("Лабораторијска потврда захтева податак о акредитацији лабораторије.");return;}
+  if(byId("evidenceLevel").value==="LAB_CONFIRMED"&&!byId("labAccreditation").value.trim()){alert("Унеси акредитацију лабораторије.");return}
+ if(byId("evidenceLevel").value!=="SUSPICION"&&!byId("evidenceReference").value.trim()){
    alert("За стручну процену или лабораторијску потврду потребна је референца доказа.");return;
   }
   const r=records.find(x=>x.id===selectedId);
   if(r){
+   if(!r.asset_id)ensureIds(r);
+   r.product_type=byId("materialType").value;
+   r.evidence_source=byId("evidenceSource").value;
+   r.cadastral_parcel=byId("cadastralParcel").value.trim();
+   r.estimated_area_m2=byId("estimatedArea").value.trim();
+   r.observation_date=byId("observationDate").value;
    r.description=byId("label").value.trim();r.orientation=byId("orientation").value;
    r.note=byId("note").value.trim();r.kml_reference=byId("kml").value.trim()||null;
    r.visual_category=byId("category").value;
    r.evidence_level=byId("evidenceLevel").value;
    r.evidence_reference=byId("evidenceReference").value.trim();
+   r.evidence_issuer=byId("evidenceIssuer").value.trim();
+   r.lab_accreditation=byId("labAccreditation").value.trim();
    r.reviewer=byId("reviewer").value.trim();
    r.building_use=byId("buildingUse").value;
    r.ownership_type=byId("ownershipType").value;
@@ -314,17 +441,29 @@ byId("save").onclick=()=>{
    r.disturbance_risk=byId("disturbanceRisk").value;
    scheduleSave();
   }
-  selectedId=null;draft=[];clearForm();render();return;
+  selectedId=null;draft=[];pendingEvidence=[];clearForm();render();return;
  }
  if(byId("evidenceLevel").value!=="SUSPICION"&&!byId("evidenceReference").value.trim()){alert("Виши ниво доказа захтева референцу.");return}
  if(!validPolygon(draft)){alert("Полигон није исправан. Потребна су бар три темена без самопресецања.");return;}
  const f=active();counter++;
- records.push({id:"a"+counter+"_"+Date.now(),source_video:dataset.source_filename,frame_filename:f.filename,
+ const kml=byId("kml").value.trim();
+ const generatedId=kml?"KML:"+kml:makeId(surfaceType==="roof"?"AZ-R":"AZ-U");
+ records.push({id:makeId("ANN"),asset_id:generatedId,component_id:makeId("PART"),
+  surface_type:surfaceType,source_video:dataset.source_filename,frame_filename:f.filename,
   requested_seek_seconds:f.requested_seek_seconds,points:draft.map(q=>q.slice()),
   image_width_px:img.naturalWidth,image_height_px:img.naturalHeight,
+  import_source_filename:byId("importSource").value||"",
+  product_type:byId("materialType").value,
+  evidence_source:byId("evidenceSource").value,
+  evidence_refs:pendingEvidence.slice(),
+  cadastral_parcel:byId("cadastralParcel").value.trim(),
+  estimated_area_m2:byId("estimatedArea").value.trim(),
+  observation_date:byId("observationDate").value,
   description:byId("label").value.trim(),orientation:byId("orientation").value,visual_category:byId("category").value,note:byId("note").value.trim(),
   evidence_level:byId("evidenceLevel").value.trim(),
   evidence_reference:byId("evidenceReference").value.trim(),
+  evidence_issuer:byId("evidenceIssuer").value.trim(),
+  lab_accreditation:byId("labAccreditation").value.trim(),
   reviewer:byId("reviewer").value.trim(),
   building_use:byId("buildingUse").value.trim(),
   ownership_type:byId("ownershipType").value.trim(),
@@ -333,7 +472,7 @@ byId("save").onclick=()=>{
   material_condition:byId("materialCondition").value.trim(),
   disturbance_risk:byId("disturbanceRisk").value.trim(),
   kml_reference:byId("kml").value.trim()||null,evidence_status:"MANUAL_VISUAL_REVIEW_NOT_LAB_CONFIRMED"});
- scheduleSave();draft=[];selectedId=null;clearForm();render();
+ scheduleSave();draft=[];selectedId=null;pendingEvidence=[];clearForm();showAttachments();render();
 };
 byId("export").onclick=()=>{
  const payload={schema_version:3,source_video:dataset.source_filename,review_type:"MANUAL_POLYGON_VISUAL_REVIEW",revision:serverRevision,annotations:records};
@@ -347,13 +486,15 @@ byId("import").onchange=async e=>{
   const data=JSON.parse(await file.text());
   if(data.source_video!==dataset.source_filename||!Array.isArray(data.annotations))throw Error("Неодговарајући извор или формат");
   const names=new Set(dataset.frames.map(f=>f.filename));
-  const converted=data.annotations.map((r,i)=>({...r,id:String(r.id||("import_"+i)),points:polygonPoints(r)}));
+  const converted=data.annotations.map((r,i)=>({...r,id:String(r.id||makeId("ANN")),points:polygonPoints(r),import_source_filename:r.import_source_filename||file.name}));
+  for(const r of converted)ensureIds(r,file.name);
   if(converted.some(r=>!names.has(r.frame_filename)||r.points.length<3||r.points.some(p=>!Array.isArray(p)||p.length!==2||p.some(v=>!Number.isFinite(v)||v<0||v>1))||!validPolygon(r.points)))throw Error("Неисправне геометрије или називи");
   if((records.length||dirty)&&!confirm("Заменити текуће ознаке подацима из JSON-а?"))return;
-  records=converted;counter=records.length;selectedId=null;draft=[];scheduleSave();render();
+  records=converted;counter=records.length;selectedId=null;draft=[];pendingEvidence=[];scheduleSave();clearForm();render();
  }catch(err){alert("Увоз није успео: "+err.message)}
 };
 window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault();e.returnValue=""}});
+setTab(dataset.default_surface==="built_in"?"built_in":"roof",{reset:false});
 loadSaved();
 </script></body></html>"""
 
@@ -377,7 +518,7 @@ def build_review_page(folder: Path, output: Path | None = None) -> Path:
             "filename": name,
             "requested_seek_seconds": frame.get("requested_seek_seconds"),
         })
-    data = json.dumps({"source_filename": source, "frames": clean_frames}, ensure_ascii=False)
+    data = json.dumps({"source_filename": source, "frames": clean_frames, "default_surface": manifest.get("default_surface", "roof")}, ensure_ascii=False)
     data = data.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     markup = _HTML.replace("__DATA__", data)
     target = output or folder / "review.html"
