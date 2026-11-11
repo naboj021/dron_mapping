@@ -1,4 +1,4 @@
-# AZBEST MAPA — Inventory V2 (draft feature)
+# Inventar azbesta — Inventory V2 (draft feature)
 
 ## 1. First restore the six Cvrčak polygons
 
