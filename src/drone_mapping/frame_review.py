@@ -82,6 +82,8 @@ textarea{height:70px;resize:vertical}
 <option value="citizen">Грађанин / сведочење</option>
 <option value="other">Друго</option></select>
 <label>Број документа / линк / референца доказа</label><input id="evidenceReference" placeholder="Обавезно за стручну процену и лабораторијску потврду">
+<label>Издавалац документа / лабораторија / стручњак</label><input id="evidenceIssuer" placeholder="Назив установе или име стручног лица">
+<label>Акредитација лабораторије (за лабораторијску потврду)</label><input id="labAccreditation" placeholder="Број акредитације или референца акредитационог тела">
 <label>Додај датотеку доказа (локално, до 20 MB)</label><input id="evidenceFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,.txt">
 <button id="uploadEvidence" type="button">Приложи датотеку</button>
 <div id="evidenceList" class="note">Нема прилога</div>
@@ -301,7 +303,7 @@ function draw(points,kind,owner){
 function clearForm(){
  byId("assetId").value="Аутоматски при чувању";
  byId("label").value="";byId("note").value="";byId("kml").value="";
- byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;byId("evidenceLevel").value="SUSPICION";byId("evidenceReference").value="";byId("reviewer").value="";byId("buildingUse").value="";byId("ownershipType").value="";byId("constructionYear").value="";byId("renovationYear").value="";byId("materialCondition").value="";byId("disturbanceRisk").value="";byId("materialType").selectedIndex=0;byId("evidenceSource").value="drone";byId("cadastralParcel").value="";byId("estimatedArea").value="";byId("observationDate").value="";byId("importSource").value="";showAttachments();
+ byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;byId("evidenceLevel").value="SUSPICION";byId("evidenceReference").value="";byId("evidenceIssuer").value="";byId("labAccreditation").value="";byId("reviewer").value="";byId("buildingUse").value="";byId("ownershipType").value="";byId("constructionYear").value="";byId("renovationYear").value="";byId("materialCondition").value="";byId("disturbanceRisk").value="";byId("materialType").selectedIndex=0;byId("evidenceSource").value="drone";byId("cadastralParcel").value="";byId("estimatedArea").value="";byId("observationDate").value="";byId("importSource").value="";showAttachments();
 }
 function loadForm(r){
  byId("assetId").value=r.asset_id||"";
@@ -318,6 +320,8 @@ function loadForm(r){
  byId("category").value=["suspected_fibrecement","kindergarten_area"].includes(r.visual_category)?"suspected_asbestos":(r.visual_category||"suspected_asbestos");
  byId("evidenceLevel").value=r.evidence_level||"SUSPICION";
  byId("evidenceReference").value=r.evidence_reference||"";
+ byId("evidenceIssuer").value=r.evidence_issuer||"";
+ byId("labAccreditation").value=r.lab_accreditation||"";
  byId("reviewer").value=r.reviewer||"";
  byId("buildingUse").value=r.building_use||"";
  byId("ownershipType").value=r.ownership_type||"";
@@ -408,7 +412,9 @@ byId("cancel").onclick=()=>{draft=[];selectedId=null;pendingEvidence=[];clearFor
 byId("save").onclick=()=>{
  if(!loaded){alert("Сачекај потврду учитавања локалних података.");return}
  if(selectedId){
-  if(byId("evidenceLevel").value!=="SUSPICION"&&!byId("evidenceReference").value.trim()){
+  if(byId("evidenceLevel").value==="LAB_CONFIRMED"&&!byId("labAccreditation").value.trim()){alert("Лабораторијска потврда захтева податак о акредитацији лабораторије.");return;}
+  if(byId("evidenceLevel").value==="LAB_CONFIRMED"&&!byId("labAccreditation").value.trim()){alert("Унеси акредитацију лабораторије.");return}
+ if(byId("evidenceLevel").value!=="SUSPICION"&&!byId("evidenceReference").value.trim()){
    alert("За стручну процену или лабораторијску потврду потребна је референца доказа.");return;
   }
   const r=records.find(x=>x.id===selectedId);
@@ -424,6 +430,8 @@ byId("save").onclick=()=>{
    r.visual_category=byId("category").value;
    r.evidence_level=byId("evidenceLevel").value;
    r.evidence_reference=byId("evidenceReference").value.trim();
+   r.evidence_issuer=byId("evidenceIssuer").value.trim();
+   r.lab_accreditation=byId("labAccreditation").value.trim();
    r.reviewer=byId("reviewer").value.trim();
    r.building_use=byId("buildingUse").value;
    r.ownership_type=byId("ownershipType").value;
@@ -454,6 +462,8 @@ byId("save").onclick=()=>{
   description:byId("label").value.trim(),orientation:byId("orientation").value,visual_category:byId("category").value,note:byId("note").value.trim(),
   evidence_level:byId("evidenceLevel").value.trim(),
   evidence_reference:byId("evidenceReference").value.trim(),
+  evidence_issuer:byId("evidenceIssuer").value.trim(),
+  lab_accreditation:byId("labAccreditation").value.trim(),
   reviewer:byId("reviewer").value.trim(),
   building_use:byId("buildingUse").value.trim(),
   ownership_type:byId("ownershipType").value.trim(),
