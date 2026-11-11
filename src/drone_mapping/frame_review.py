@@ -494,7 +494,7 @@ byId("import").onchange=async e=>{
  }catch(err){alert("Увоз није успео: "+err.message)}
 };
 window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault();e.returnValue=""}});
-setTab("roof",{reset:false});
+setTab(dataset.default_surface==="built_in"?"built_in":"roof",{reset:false});
 loadSaved();
 </script></body></html>"""
 
@@ -518,7 +518,7 @@ def build_review_page(folder: Path, output: Path | None = None) -> Path:
             "filename": name,
             "requested_seek_seconds": frame.get("requested_seek_seconds"),
         })
-    data = json.dumps({"source_filename": source, "frames": clean_frames}, ensure_ascii=False)
+    data = json.dumps({"source_filename": source, "frames": clean_frames, "default_surface": manifest.get("default_surface", "roof")}, ensure_ascii=False)
     data = data.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     markup = _HTML.replace("__DATA__", data)
     target = output or folder / "review.html"
