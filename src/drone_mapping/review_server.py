@@ -115,6 +115,8 @@ def serve(folder: Path, host: str = "127.0.0.1", port: int = 8765, seed: Path | 
         seed_payload = json.loads(seed.read_text(encoding="utf-8"))
         validate_payload(seed_payload, source_video, frame_names)
         seed_payload["revision"] = 0
+        for record in seed_payload["annotations"]:
+            record.setdefault("import_source_filename", seed.name)
         atomic_save(save_file, seed_payload)
         print(f"Imported {len(seed_payload['annotations'])} prior annotations into {save_file}", flush=True)
 
