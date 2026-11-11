@@ -61,11 +61,33 @@ textarea{height:70px;resize:vertical}
 </select>
 <label>Opis oblasti</label><input id="label" placeholder="npr. dva krova gore levo / deo vrtića">
 <label>Vizuelna kategorija</label><select id="category">
-<option value="suspected_fibrecement">Sumnja na vlaknocementni pokrivač</option>
+<option value="suspected_asbestos">Sumnja na azbest</option>
 <option value="other_roof">Drugi tip krova</option>
-<option value="kindergarten_area">Deo objekta vrtića</option>
 <option value="replaced_roof_section">Zamenjeni deo krova — istorijska promena</option>
 <option value="unknown">Neodređeno</option></select>
+<label>Ниво доказа</label><select id="evidenceLevel">
+<option value="SUSPICION">Сумња</option>
+<option value="EXPERT_ASSESSMENT">Стручна процена</option>
+<option value="LAB_CONFIRMED">Лабораторијска потврда</option></select>
+<label>Референца доказа (за виши ниво обавезно)</label><input id="evidenceReference" placeholder="Број извештаја, стручњак или документ">
+<label>Ко је прегледао снимак?</label><input id="reviewer" placeholder="Име или шифра прегледача">
+<label>Намена објекта</label><select id="buildingUse">
+<option value="">Непознато</option><option value="preschool">Вртић</option>
+<option value="residential">Стамбено</option><option value="school">Школа</option>
+<option value="industrial">Индустријско</option><option value="commercial">Пословно</option>
+<option value="other">Друго</option></select>
+<label>Власништво</label><select id="ownershipType">
+<option value="">Непознато</option><option value="public">Јавно</option>
+<option value="private">Приватно</option><option value="mixed">Мешовито</option></select>
+<label>Година изградње (ако је позната)</label><input id="constructionYear" inputmode="numeric" placeholder="нпр. 1975">
+<label>Последња позната обнова крова/фасаде — година</label><input id="renovationYear" inputmode="numeric" placeholder="ако је документована">
+<label>Стање материјала</label><select id="materialCondition">
+<option value="">Непознато</option><option value="apparently_intact">Наизглед очуван</option>
+<option value="visibly_damaged">Видљиво оштећен</option><option value="disturbed">Радови/узнемиравање материјала</option>
+<option value="replaced">Замењен</option></select>
+<label>Могуће нарушавање/контакт</label><select id="disturbanceRisk">
+<option value="">Није процењено</option><option value="none_visible">Нема видљивих радова</option>
+<option value="works_visible">Уочени радови</option><option value="public_access">Приступачно људима</option></select>
 <label>Opis / napomena</label><textarea id="note" placeholder="Šta se vidi; šta treba proveriti?"></textarea>
 <label>KML ID објекта (опционо, може се понављати за више кровова)</label><input id="kml" placeholder="Остави празно ако област није била у KML-у">
 <div><button class="primary" id="save" disabled>Сачувај област</button><button id="cancel">Откажи цртање</button></div>
@@ -80,7 +102,7 @@ const dataset=__DATA__;
 let index=0, records=[], draft=[], selectedId=null, drag=null, counter=0, dirty=false, zoom=1;
 const localMode=location.protocol==="http:"&&location.hostname==="127.0.0.1";
 const reviewToken="__LOCAL_REVIEW_TOKEN__";
-let saveQueue=Promise.resolve(), editVersion=0, savedVersion=0, loaded=false;
+let saveQueue=Promise.resolve(), editVersion=0, savedVersion=0, loaded=false, serverRevision=0;
 const byId=id=>document.getElementById(id);
 byId("source").textContent=dataset.source_filename;
 const overlay=byId("overlay"), img=byId("photo"), viewer=byId("viewer"), framebox=byId("framebox");
@@ -115,15 +137,18 @@ function status(message){byId("saveStatus").textContent=message}
 function scheduleSave(){
  dirty=true;const revision=++editVersion;
  if(!localMode){status("Није аутоматски сачувано: извези JSON или отвори локални сервер.");return}
- const payload=JSON.stringify({schema_version:2,source_video:dataset.source_filename,
-  review_type:"MANUAL_POLYGON_VISUAL_REVIEW",annotations:records});
+ const annotationsSnapshot=JSON.parse(JSON.stringify(records));
  status("Чување у локални JSON…");
  saveQueue=saveQueue.catch(()=>{}).then(async()=>{
+  const payload=JSON.stringify({schema_version:3,source_video:dataset.source_filename,
+   review_type:"MANUAL_POLYGON_VISUAL_REVIEW",revision:serverRevision,annotations:annotationsSnapshot});
   const response=await fetch("/api/annotations",{
    method:"POST",headers:{"Content-Type":"application/json","X-Review-Token":reviewToken},
    body:payload
   });
+  if(response.status===409)throw Error("КОНФЛИКТ: други прозор је сачувао новију верзију. Извези JSON, освежи страницу и ручно споји ознаке.");
   if(!response.ok)throw Error(await response.text());
+  const ack=await response.json();serverRevision=ack.revision;
   savedVersion=Math.max(savedVersion,revision);
   if(savedVersion===editVersion){dirty=false;status("Сачувано на диску ✓")}
  }).catch(err=>{status("ГРЕШКА чувања — извези JSON! "+err.message)});
@@ -135,7 +160,7 @@ async function loadSaved(){
   if(!response.ok)throw Error(await response.text());
   const data=await response.json();
   if(data.source_video!==dataset.source_filename||!Array.isArray(data.annotations))throw Error("Неодговарајућа датотека");
-  records=data.annotations;counter=records.length;savedVersion=editVersion;dirty=false;loaded=true;
+  records=data.annotations;serverRevision=data.revision||0;counter=records.length;savedVersion=editVersion;dirty=false;loaded=true;
   status("Локално чување укључено ✓ ("+records.length+" ознака учитано)");
  }catch(err){status("Не могу да учитам локалне ознаке: "+err.message+". Не почињи анотацију.");}
  finally{render()}
@@ -170,14 +195,23 @@ function draw(points,kind,owner){
 }
 function clearForm(){
  byId("label").value="";byId("note").value="";byId("kml").value="";
- byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;
+ byId("orientation").selectedIndex=0;byId("category").selectedIndex=0;byId("evidenceLevel").value="";byId("evidenceReference").value="";byId("reviewer").value="";byId("buildingUse").value="";byId("ownershipType").value="";byId("constructionYear").value="";byId("renovationYear").value="";byId("materialCondition").value="";byId("disturbanceRisk").value="";
 }
 function loadForm(r){
  byId("label").value=r.description||"";
  byId("note").value=r.note||"";
  byId("kml").value=r.kml_reference||"";
  byId("orientation").value=r.orientation||"";
- byId("category").value=r.visual_category||"unknown";
+ byId("category").value=["suspected_fibrecement","kindergarten_area"].includes(r.visual_category)?"suspected_asbestos":(r.visual_category||"suspected_asbestos");
+ byId("evidenceLevel").value=r.evidence_level||"";
+ byId("evidenceReference").value=r.evidence_reference||"";
+ byId("reviewer").value=r.reviewer||"";
+ byId("buildingUse").value=r.building_use||"";
+ byId("ownershipType").value=r.ownership_type||"";
+ byId("constructionYear").value=r.construction_year||"";
+ byId("renovationYear").value=r.renovation_year||"";
+ byId("materialCondition").value=r.material_condition||"";
+ byId("disturbanceRisk").value=r.disturbance_risk||"";
 }
 function render(){
  const f=active();const url=encodeURIComponent(f.filename);
@@ -264,20 +298,41 @@ byId("save").onclick=()=>{
   const r=records.find(x=>x.id===selectedId);
   if(r){r.description=byId("label").value.trim();r.orientation=byId("orientation").value;
    r.note=byId("note").value.trim();r.kml_reference=byId("kml").value.trim()||null;
-   r.visual_category=byId("category").value;scheduleSave();}
+   r.visual_category=byId("category").value;
+   r.evidence_level=byId("evidenceLevel").value.trim();
+   r.evidence_reference=byId("evidenceReference").value.trim();
+   r.reviewer=byId("reviewer").value.trim();
+   r.building_use=byId("buildingUse").value.trim();
+   r.ownership_type=byId("ownershipType").value.trim();
+   r.construction_year=byId("constructionYear").value.trim();
+   r.renovation_year=byId("renovationYear").value.trim();
+   r.material_condition=byId("materialCondition").value.trim();
+   r.disturbance_risk=byId("disturbanceRisk").value.trim();
+   if(r.evidence_level!=="SUSPICION"&&!r.evidence_reference){alert("За стручну процену или лабораторијску потврду унеси референцу доказа.");return}
+   scheduleSave();}
   selectedId=null;draft=[];clearForm();render();return;
  }
+ if(byId("evidenceLevel").value!=="SUSPICION"&&!byId("evidenceReference").value.trim()){alert("Виши ниво доказа захтева референцу.");return}
  if(!validPolygon(draft)){alert("Полигон није исправан. Потребна су бар три темена без самопресецања.");return;}
  const f=active();counter++;
  records.push({id:"a"+counter+"_"+Date.now(),source_video:dataset.source_filename,frame_filename:f.filename,
   requested_seek_seconds:f.requested_seek_seconds,points:draft.map(q=>q.slice()),
   image_width_px:img.naturalWidth,image_height_px:img.naturalHeight,
   description:byId("label").value.trim(),orientation:byId("orientation").value,visual_category:byId("category").value,note:byId("note").value.trim(),
+  evidence_level:byId("evidenceLevel").value.trim(),
+  evidence_reference:byId("evidenceReference").value.trim(),
+  reviewer:byId("reviewer").value.trim(),
+  building_use:byId("buildingUse").value.trim(),
+  ownership_type:byId("ownershipType").value.trim(),
+  construction_year:byId("constructionYear").value.trim(),
+  renovation_year:byId("renovationYear").value.trim(),
+  material_condition:byId("materialCondition").value.trim(),
+  disturbance_risk:byId("disturbanceRisk").value.trim(),
   kml_reference:byId("kml").value.trim()||null,evidence_status:"MANUAL_VISUAL_REVIEW_NOT_LAB_CONFIRMED"});
  scheduleSave();draft=[];selectedId=null;clearForm();render();
 };
 byId("export").onclick=()=>{
- const payload={schema_version:2,source_video:dataset.source_filename,review_type:"MANUAL_POLYGON_VISUAL_REVIEW",annotations:records};
+ const payload={schema_version:3,source_video:dataset.source_filename,review_type:"MANUAL_POLYGON_VISUAL_REVIEW",revision:serverRevision,annotations:records};
  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}));
  const a=document.createElement("a");a.href=url;a.download="annotations_"+dataset.source_filename.replace(/\.mp4$/i,"")+".json";a.click();
  setTimeout(()=>URL.revokeObjectURL(url),1000);if(!localMode){dirty=false;status("JSON извезен; сачувај преузету датотеку.")}
