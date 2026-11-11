@@ -29,6 +29,8 @@ def validate_payload(payload: object, source_video: str, frame_names: set[str]) 
         raise ValueError("Revision must be a non-negative integer")
     valid_evidence = {"SUSPICION", "EXPERT_ASSESSMENT", "LAB_CONFIRMED"}
     for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("Each annotation must be an object")
         level = item.get("evidence_level", "SUSPICION")
         if level not in valid_evidence:
             raise ValueError("Unknown evidence level")
