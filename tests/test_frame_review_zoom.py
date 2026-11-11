@@ -14,7 +14,8 @@ def test_review_zoom_and_single_step_save(tmp_path: Path):
     assert 'id="zoom"' in page and 'id="zoomin"' in page
     assert 'id="zoomout"' in page and 'id="fit"' in page
     assert 'id="finish"' not in page and 'id="new"' not in page
-    assert page.index('id="records"') < page.index('Nova oznaka')
+    assert page.index('id="records"') < page.index('id="tabRoof"')
+    assert 'id="tabBuilt"' in page
     assert 'byId("label").value="";byId("note").value="";byId("kml").value=""' in page
     assert 'byId("category").selectedIndex=0' in page
     assert 'MANUAL_POLYGON_VISUAL_REVIEW' in page
