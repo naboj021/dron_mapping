@@ -295,21 +295,25 @@ byId("cancel").onclick=()=>{draft=[];selectedId=null;clearForm();render()};
 byId("save").onclick=()=>{
  if(!loaded){alert("Сачекај потврду учитавања локалних података.");return}
  if(selectedId){
+  if(byId("evidenceLevel").value!=="SUSPICION"&&!byId("evidenceReference").value.trim()){
+   alert("За стручну процену или лабораторијску потврду потребна је референца доказа.");return;
+  }
   const r=records.find(x=>x.id===selectedId);
-  if(r){r.description=byId("label").value.trim();r.orientation=byId("orientation").value;
+  if(r){
+   r.description=byId("label").value.trim();r.orientation=byId("orientation").value;
    r.note=byId("note").value.trim();r.kml_reference=byId("kml").value.trim()||null;
    r.visual_category=byId("category").value;
-   r.evidence_level=byId("evidenceLevel").value.trim();
+   r.evidence_level=byId("evidenceLevel").value;
    r.evidence_reference=byId("evidenceReference").value.trim();
    r.reviewer=byId("reviewer").value.trim();
-   r.building_use=byId("buildingUse").value.trim();
-   r.ownership_type=byId("ownershipType").value.trim();
+   r.building_use=byId("buildingUse").value;
+   r.ownership_type=byId("ownershipType").value;
    r.construction_year=byId("constructionYear").value.trim();
    r.renovation_year=byId("renovationYear").value.trim();
-   r.material_condition=byId("materialCondition").value.trim();
-   r.disturbance_risk=byId("disturbanceRisk").value.trim();
-   if(r.evidence_level!=="SUSPICION"&&!r.evidence_reference){alert("За стручну процену или лабораторијску потврду унеси референцу доказа.");return}
-   scheduleSave();}
+   r.material_condition=byId("materialCondition").value;
+   r.disturbance_risk=byId("disturbanceRisk").value;
+   scheduleSave();
+  }
   selectedId=null;draft=[];clearForm();render();return;
  }
  if(byId("evidenceLevel").value!=="SUSPICION"&&!byId("evidenceReference").value.trim()){alert("Виши ниво доказа захтева референцу.");return}
