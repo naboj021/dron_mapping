@@ -11,6 +11,7 @@ import os
 import secrets
 import shutil
 import tempfile
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -24,6 +25,8 @@ def validate_payload(payload: object, source_video: str, frame_names: set[str]) 
     items = payload.get("annotations")
     if not isinstance(items, list) or len(items) > 20_000:
         raise ValueError("Expected annotations array (max 20,000)")
+    if not isinstance(payload.get("revision", 0), int) or payload.get("revision", 0) < 0:
+        raise ValueError("Revision must be a non-negative integer")
     for item in items:
         if not isinstance(item, dict) or item.get("frame_filename") not in frame_names:
             raise ValueError("Unknown frame or invalid annotation")
@@ -45,7 +48,7 @@ def validate_payload(payload: object, source_video: str, frame_names: set[str]) 
                 raise ValueError("Invalid legacy box")
         else:
             raise ValueError("Missing annotation polygon")
-        for key in ("description", "note", "orientation", "visual_category"):
+        for key in ("description", "note", "orientation", "visual_category", "reviewer", "evidence_level", "evidence_reference", "building_use", "ownership_type", "construction_year", "renovation_year", "material_location", "material_condition", "disturbance_risk", "surface_type"):
             if key in item and (not isinstance(item[key], str) or len(item[key]) > 5000):
                 raise ValueError("Invalid annotation field: " + key)
         if item.get("kml_reference") is not None and (
@@ -73,7 +76,7 @@ def atomic_save(target: Path, payload: dict) -> None:
             os.unlink(tmp_path)
 
 
-def serve(folder: Path, host: str = "127.0.0.1", port: int = 8765) -> None:
+def serve(folder: Path, host: str = "127.0.0.1", port: int = 8765, seed: Path | None = None) -> None:
     folder = folder.resolve()
     if host not in ("127.0.0.1", "localhost"):
         raise ValueError("Review server must bind to localhost only")
@@ -84,6 +87,15 @@ def serve(folder: Path, host: str = "127.0.0.1", port: int = 8765) -> None:
         raise ValueError("Unsafe frame filename in manifest")
     token = secrets.token_urlsafe(32)
     save_file = folder / "annotations.local.json"
+    save_lock = threading.Lock()
+    if seed is not None:
+        if save_file.exists():
+            raise FileExistsError("Existing autosave found: refusing to overwrite it with seed")
+        seed_payload = json.loads(seed.read_text(encoding="utf-8"))
+        validate_payload(seed_payload, source_video, frame_names)
+        seed_payload["revision"] = 0
+        atomic_save(save_file, seed_payload)
+        print(f"Imported {len(seed_payload['annotations'])} prior annotations into {save_file}", flush=True)
 
     class Handler(BaseHTTPRequestHandler):
         def _send(self, data: bytes, status: int, mime: str) -> None:
@@ -105,9 +117,12 @@ def serve(folder: Path, host: str = "127.0.0.1", port: int = 8765) -> None:
                 if not self._allowed():
                     return self._send(b"Forbidden", 403, "text/plain")
                 if save_file.is_file():
-                    return self._send(save_file.read_bytes(), 200, "application/json; charset=utf-8")
-                empty = {"schema_version": 2, "source_video": source_video,
-                         "review_type": "MANUAL_POLYGON_VISUAL_REVIEW", "annotations": []}
+                    with save_lock:
+                        current = json.loads(save_file.read_text(encoding="utf-8"))
+                    current.setdefault("revision", 0)
+                    return self._send(json.dumps(current, ensure_ascii=False).encode(), 200, "application/json; charset=utf-8")
+                empty = {"schema_version": 3, "source_video": source_video,
+                         "review_type": "MANUAL_POLYGON_VISUAL_REVIEW", "revision": 0, "annotations": []}
                 return self._send(json.dumps(empty).encode(), 200, "application/json")
             if route in ("", "review.html"):
                 page = (folder / "review.html").read_text(encoding="utf-8")
@@ -129,10 +144,20 @@ def serve(folder: Path, host: str = "127.0.0.1", port: int = 8765) -> None:
                     raise ValueError("Invalid payload size")
                 payload = json.loads(self.rfile.read(length))
                 validate_payload(payload, source_video, frame_names)
-                atomic_save(save_file, payload)
+                with save_lock:
+                    current_revision = 0
+                    if save_file.exists():
+                        stored = json.loads(save_file.read_text(encoding="utf-8"))
+                        current_revision = stored.get("revision", 0)
+                    if payload.get("revision", 0) != current_revision:
+                        return self._send(
+                            json.dumps({"error": "VERSION_CONFLICT", "current_revision": current_revision}).encode(),
+                            409, "application/json")
+                    payload["revision"] = current_revision + 1
+                    atomic_save(save_file, payload)
             except (ValueError, OSError, TypeError, json.JSONDecodeError) as exc:
                 return self._send(str(exc).encode("utf-8")[:600], 400, "text/plain; charset=utf-8")
-            return self._send(b'{"saved":true}', 200, "application/json")
+            return self._send(json.dumps({"saved": True, "revision": payload["revision"]}).encode(), 200, "application/json")
 
     httpd = ThreadingHTTPServer((host, port), Handler)
     print(f"Local review: http://127.0.0.1:{httpd.server_port}/review.html", flush=True)
@@ -150,8 +175,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Serve a local autosaving frame reviewer")
     parser.add_argument("frames_dir", type=Path)
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--seed", type=Path, help="Import prior export ONLY if no local autosave exists")
     args = parser.parse_args()
-    serve(args.frames_dir, port=args.port)
+    serve(args.frames_dir, port=args.port, seed=args.seed)
 
 
 if __name__ == "__main__":
